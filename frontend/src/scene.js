@@ -7,7 +7,7 @@ export function createScene(engine, canvas) {
   scene.fogDensity = 0.001;
 
   scene.clearColor = new BABYLON.Color4(0.8, 0.8, 0.9, 1.0);
-
+  scene.useRightHandedSystem = true; 
   const camera = new BABYLON.ArcRotateCamera(
     "camera",
     Math.PI / 2,

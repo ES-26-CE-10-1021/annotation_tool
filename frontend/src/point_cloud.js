@@ -1,127 +1,3 @@
-//
-// export let pointPositions = [];
-// export let pointColors = [];
-// export let pointMesh = null;
-//
-// export async function startStreaming(scene) {
-//
-//   pointMesh = new BABYLON.Mesh("points", scene);
-//
-//   var material = new BABYLON.StandardMaterial("mat", scene);
-//   material.pointsCloud = true;
-//   material.pointSize = 0.1;
-//
-//   material.emissiveColor = new BABYLON.Color3(1,1,1);
-//
-//
-//   material.useVertexColors = true;
-//   material.disableLighting = true;
-//
-//   pointMesh.material = material;
-//
-//   let chunk = 0;
-//
-//   while (true) {
-//
-//     const res = await fetch(`/points/${chunk}`);
-//
-//     if (res.status === 204)
-//       break;
-//
-//     const buffer = await res.arrayBuffer();
-//     const data = new Float32Array(buffer);
-//
-//     for (let i = 0; i < data.length; i += 3) {
-//
-//       pointPositions.push(data[i]);
-//       pointPositions.push(data[i+1]);
-//       pointPositions.push(data[i+2]);
-//
-//       // default color = white
-//       pointColors.push(0.5,0.5,0.5,1);
-//     }
-//
-//     var vertexData = new BABYLON.VertexData();
-//     vertexData.positions = pointPositions;
-//     vertexData.colors = pointColors;
-//
-//
-//     vertexData.applyToMesh(pointMesh, true);
-//
-//     chunk++;
-//   }
-// }
-// import vertexShader from "../shaders/pointCloud.vertex.glsl?raw";
-// import fragmentShader from "../shaders/pointCloud.fragment.glsl?raw";
-// BABYLON.Effect.ShadersStore["pointCloudVertexShader"] = vertexShader;
-// BABYLON.Effect.ShadersStore["pointCloudFragmentShader"] = fragmentShader;
-// export let pointPositions = [];
-// export let pointNormals = [];
-// export let pointMesh = null;
-// export let pointMaterial = null;
-//
-// export async function startStreaming(scene) {
-//
-//   pointMesh = new BABYLON.Mesh("points", scene);
-//
-//   // CUSTOM SHADER MATERIAL
-//   pointMaterial = new BABYLON.ShaderMaterial(
-//     "pointShader",
-//     scene,
-//     {
-//       vertex: "pointCloud",
-//       fragment: "pointCloud"
-//     },
-//     {
-//       attributes: ["position", "normal"],
-//       uniforms: [
-//         "world",
-//         "worldViewProjection",
-//         "bboxInv",
-//         "bboxColor",
-//         "bboxCount"
-//       ]
-//     }
-//   );
-//   pointMaterial.pointSize = 0.1;
-//   pointMaterial.pointsCloud = true;
-//   pointMesh.material = pointMaterial;
-//   let chunk = 0;
-//
-//   while (true) {
-//
-//     const res = await fetch(`/points/${chunk}`);
-//
-//     if (res.status === 204)
-//       break;
-//
-//     const buffer = await res.arrayBuffer();
-//     const data = new Float16Array(buffer);
-//
-//     for (let i = 0; i < data.length; i += 6) {
-//
-//       pointPositions.push(
-//         data[i],
-//         data[i+1],
-//         data[i+2]
-//       );
-//
-//       pointNormals.push(
-//         data[i+3],
-//         data[i+4],
-//         data[i+5]
-//       );
-//
-//     }
-//
-//     const vertexData = new BABYLON.VertexData();
-//     vertexData.positions = pointPositions;
-//     vertexData.normals = pointNormals;
-//     vertexData.applyToMesh(pointMesh, true);
-//
-//     chunk++;
-//   }
-// }
 import vertexShader from "../shaders/pointCloud.vertex.glsl?raw";
 import fragmentShader from "../shaders/pointCloud.fragment.glsl?raw";
 
@@ -137,7 +13,11 @@ let currentPositions = [];
 let currentNormals = [];
 let currentPointCount = 0;
 let currentMesh = null;
-
+let showNormals = true; 
+let coloringMode = 0; 
+let pointSize = 1;
+let cloudMin = new BABYLON.Vector3(-50, -50, -50);
+let cloudMax = new BABYLON.Vector3(50, 50, 50);
 function createNewMesh(scene) {
 
   currentMesh = new BABYLON.Mesh("points_" + pointMeshes.length, scene);
@@ -157,12 +37,19 @@ function createNewMesh(scene) {
           "worldViewProjection",
           "bboxInv",
           "bboxColor",
-          "bboxCount"
+          "bboxCount",
+          "pointSize",
+          "showNormals",
+          "coloringMode",
+          "cloudMin",
+          "cloudMax",
         ]
       }
     );
 
-    pointMaterial.pointSize = 0.1;
+    pointMaterial.setFloat("pointSize", pointSize);
+    pointMaterial.setVector3("cloudMin", cloudMin);
+    pointMaterial.setVector3("cloudMax", cloudMax);
     pointMaterial.pointsCloud = true;
   }
 
@@ -183,7 +70,7 @@ export async function startStreaming(scene) {
 
   while (true) {
 
-    const res = await fetch(`/points/${chunk}`);
+    const res = await fetch(`/api/points/${chunk}`);
 
     if (res.status === 204)
       break;
@@ -230,4 +117,57 @@ function updateMesh() {
   vertexData.normals = currentNormals;
 
   vertexData.applyToMesh(currentMesh, true);
+}
+
+
+
+
+export function setupKeyboard(scene) {
+
+  scene.onKeyboardObservable.add((kbInfo) => {
+
+    if (kbInfo.type !== BABYLON.KeyboardEventTypes.KEYDOWN)
+      return;
+
+    switch (kbInfo.event.key) {
+
+      case "+":
+      case "=":
+        pointSize += 0.2;
+        pointMaterial.setFloat("pointSize", pointSize);
+        console.log("pointSize:", pointSize);
+        break;
+
+      case "-":
+        pointSize = Math.max(0.1, pointSize - 0.2);
+        pointMaterial.setFloat("pointSize", pointSize);
+        console.log("pointSize:", pointSize);
+        break;
+
+      case "n":
+      case "N":
+        showNormals = !showNormals;
+        pointMaterial.setInt("showNormals", showNormals ? 1 : 0);
+        console.log("showNormals:", showNormals);
+        break;
+
+      case "1":
+        pointMaterial.setInt("coloringMode", 0);
+        break;
+
+      case "2":
+        pointMaterial.setInt("coloringMode", 1);
+        break;
+
+      case "3":
+        pointMaterial.setInt("coloringMode", 2);
+        break;
+
+      case "4":
+        pointMaterial.setInt("coloringMode", 3);
+        break;
+    }
+
+  });
+
 }
