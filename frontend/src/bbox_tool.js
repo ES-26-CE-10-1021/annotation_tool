@@ -2,7 +2,15 @@ import { pointMaterial } from "./point_cloud.js";
 import * as GUI from "@babylonjs/gui";
 import { CONFIG } from "./config.js";
 
+let labelGroup;
+let instanceInput;
+let instanceLabel;
+let noteInput;
+let bboxOverviewPanel; 
+let cameraRef = null;
+let sceneRef = null; 
 
+let labelIdToName;
 
 
 const CLASS_COLORS = {
@@ -37,14 +45,97 @@ export async function uploadBoundingBoxes() {
 }
 
 
+function groupBBoxesByLabel() {
+
+  const groups = new Map();
+
+  bboxes.forEach(bbox => {
+    const label = bbox.metadata.label;
+
+    if (!groups.has(label)) {
+      groups.set(label, []);
+    }
+
+    groups.get(label).push(bbox);
+  });
+
+  return groups;
+}
+
+export function createBBoxOverview(scene, gizmoManager, camera) {
+  const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI", true, scene);
+  const panel = new GUI.StackPanel(); 
+  panel.width = "150px";
+  panel.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
+  panel.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_CENTER;
+  gui.addControl(panel);
+
+  cameraRef = camera; 
+  sceneRef = scene;
+
+  // store panel so we can update it later
+  bboxOverviewPanel = panel;
+
+  labelIdToName = Object.fromEntries(
+    Object.entries(CONFIG.frontend.label_dict).map(([k, v]) => [v, k])
+  );
+  refreshBBoxOverview(gizmoManager);
 
 
-function createBBoxMenu(scene) {
+}
+
+
+
+function refreshBBoxOverview(gizmoManager) {
+
+  if (!bboxOverviewPanel) return;
+
+  bboxOverviewPanel.clearControls();
+
+  const groups = groupBBoxesByLabel();
+
+  groups.forEach((boxes, labelId) => {
+
+    // 🔹 Group title
+    const header = new GUI.TextBlock();
+    header.text = labelIdToName[labelId] || `Label ${labelId}`;
+    header.height = "30px";
+    header.color = "white";
+    header.fontSize = 16;
+    header.paddingTop = "10px";
+    header.blur; 
+
+    bboxOverviewPanel.addControl(header);
+
+    // 🔹 Buttons inside group
+    boxes.forEach((bbox, index) => {
+
+      const btn = GUI.Button.CreateSimpleButton(
+        "bbox_" + index,
+        `#${bbox.metadata.instance ?? index}`
+      );
+
+      btn.height = "30px";
+      btn.color = "white";
+      btn.background = (bbox === activeBBox) ? "#00aa00" : "#444444";
+
+      btn.onPointerClickObservable.add(() => {
+        selectBBox(bbox, gizmoManager);
+        focusCameraSmooth(cameraRef, bbox, sceneRef);
+      });
+
+      bboxOverviewPanel.addControl(btn);
+    });
+
+  });
+}
+
+export function createBBoxMenu(scene) {
 
   const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI", true, scene);
 
   const panel = new GUI.StackPanel();
-  panel.width = "260px";
+  panel.width = "200px";
   panel.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
   panel.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_CENTER;
   panel.paddingTop = "20px";
@@ -56,7 +147,7 @@ function createBBoxMenu(scene) {
 
   // TITLE
   const title = new GUI.TextBlock();
-  title.text = "Bounding Box Annotation";
+  title.text = "Bounding Box";
   title.height = "30px";
   title.color = "white";
   title.fontSize = 20;
@@ -67,15 +158,14 @@ function createBBoxMenu(scene) {
   // LABEL SELECTOR
   // -----------------------------
 
-  const labelTitle = new GUI.TextBlock();
-  labelTitle.text = "Label";
-  labelTitle.height = "25px";
-  labelTitle.color = "white";
+  // const labelTitle = new GUI.TextBlock();
+  // labelTitle.text = "Label";
+  // labelTitle.height = "25px";
+  // labelTitle.color = "white";
+  //
+  // panel.addControl(labelTitle);
 
-  panel.addControl(labelTitle);
-
-  const labelGroup = new GUI.RadioGroup("labels");
-  
+  labelGroup = new GUI.RadioGroup("labels");
 
   const labels = Object.entries(CONFIG.frontend.label_dict)
     .map(([name, id]) => ({
@@ -84,7 +174,6 @@ function createBBoxMenu(scene) {
     }))
     .sort((a, b) => a.id - b.id);
   labels.forEach(l => {
-
     labelGroup.addRadio(l.name, (state)=>{
 
       if(state && activeBBox){
@@ -95,13 +184,22 @@ function createBBoxMenu(scene) {
       }
 
     });
-
   });
 
+  labelGroup.selectors.forEach((selector, i) => {
+    selector._labelId = labels[i].id;
+  });
+
+
   const selector = new GUI.SelectionPanel("labelPanel");
-  selector.adaptHeightToChildren  = true;
+  selector.adaptHeightToChildren= true;  
+  selector.paddingBottomInPixels = -5;
   selector.addGroup(labelGroup);
-  selector.background = "#285154";
+  // selector.background = "#285154";
+  selector.background = "#333333";
+  selector.headerColor = "white";
+  selector.labelColor = "white";
+  // selector.spacerHeight = "50px";
   panel.addControl(selector);
 
   // -----------------------------
@@ -115,9 +213,9 @@ function createBBoxMenu(scene) {
 
   panel.addControl(instanceLabel);
 
-  const instanceInput = new GUI.InputText();
+  instanceInput = new GUI.InputText();
   instanceInput.height = "35px";
-  instanceInput.width = "240px";
+  instanceInput.width = "200px"; 
   instanceInput.color = "white";
   instanceInput.background = "#333333";
 
@@ -144,25 +242,70 @@ function createBBoxMenu(scene) {
 
   panel.addControl(noteLabel);
 
-  const noteInput = new GUI.InputText();
+  noteInput = new GUI.InputText();
   noteInput.height = "40px";
-  noteInput.width = "240px";
+  noteInput.width = "200px";
   noteInput.color = "white";
   noteInput.background = "#333333";
 
   noteInput.onTextChangedObservable.add(()=>{
-
     if(activeBBox){
-
       activeBBox.metadata.note = noteInput.text;
-
     }
-
   });
-
   panel.addControl(noteInput);
-
 }
+
+
+// function updateBBoxMenuFromSelection() {
+//
+//   if (!activeBBox) return;
+//
+//   // Label
+//   if (labelGroup){
+//     labelGroup.selectors.forEach(selector => {
+//       selector.isChecked = (
+//         selector._labelId === activeBBox.metadata.label
+//       );
+//     });
+//   }
+//
+//   // Instance
+//   if (instanceInput){
+//     instanceInput.text = String(activeBBox.metadata.instance ?? "");
+//   }
+//
+//   // Note
+//   if (noteInput){
+//     noteInput.text = activeBBox.metadata.note ?? "";
+//   }
+// }
+
+function updateBBoxMenuFromSelection() {
+
+  if (!activeBBox || !labelGroup) return;
+
+  const label = activeBBox.metadata.label;
+
+  const target = labelGroup.selectors.find(
+    s => s._labelId === label
+  );
+
+  if (target) {
+    target.isChecked = true; 
+  }
+
+  // Instance
+  if (instanceInput){
+    instanceInput.text = String(activeBBox.metadata.instance ?? "");
+  }
+
+  // Note
+  if (noteInput){
+    noteInput.text = activeBBox.metadata.note ?? "";
+  }
+}
+
 
 const bboxes = [];
 let activeBBox = null;
@@ -182,7 +325,7 @@ export function setupBBoxPicking(scene, gizmoManager) {
     if(pick.pickedMesh && pick.pickedMesh.name === "bbox") {
 
       selectBBox(pick.pickedMesh, gizmoManager);
-
+      refreshBBoxOverview(gizmoManager);
     }
 
   });
@@ -212,11 +355,10 @@ export function createBoundingBox(scene, gizmoManager) {
     size:default_size
   };
   selectBBox(bbox, gizmoManager);
-  gizmoManager.gizmos.positionGizmo.onDragObservable.add(updateShaderBoxes);
-  gizmoManager.gizmos.rotationGizmo.onDragObservable.add(updateShaderBoxes);
-  gizmoManager.gizmos.scaleGizmo.onDragObservable.add(updateShaderBoxes);
-  // gizmoManager.gizmos.boundingBoxGizmo.onDragObservable.add(updateShaderBoxes);
-  createBBoxMenu(scene);
+  // gizmoManager.gizmos.positionGizmo.onDragObservable.add(updateShaderBoxes);
+  // gizmoManager.gizmos.rotationGizmo.onDragObservable.add(updateShaderBoxes);
+  // gizmoManager.gizmos.scaleGizmo.onDragObservable.add(updateShaderBoxes);
+  refreshBBoxOverview(gizmoManager);
 }
 
 
@@ -241,6 +383,7 @@ export function deleteBoundingBox(gizmoManager){
 
   // Update shader
   updateShaderBoxes();
+  refreshBBoxOverview(gizmoManager);
 }
 
 export function saveBoundingBoxes() {
@@ -277,7 +420,6 @@ export function loadBoundingBoxes(scene, jsonData, gizmoManager) {
   mat.wireframe = true;
   mat.emissiveColor = new BABYLON.Color3(1,0,0);
 
-
   for (const item of parsed.bboxes) {
     const size = item.base_size ?? 1;
 
@@ -295,7 +437,7 @@ export function loadBoundingBoxes(scene, jsonData, gizmoManager) {
     bbox.rotationQuaternion = new BABYLON.Quaternion(
       ...item.rotationQuaternion
     );
-
+    bbox.computeWorldMatrix(true);
     // IMPORTANT: clear Euler rotation
     // bbox.rotation = BABYLON.Vector3.Zero();
 
@@ -305,39 +447,26 @@ export function loadBoundingBoxes(scene, jsonData, gizmoManager) {
       instance: item.instance,
       note: item.note
     };
-
-    bboxes.push(bbox);
-
     selectBBox(bbox, gizmoManager);
-    gizmoManager.gizmos.positionGizmo.onDragObservable.add(updateShaderBoxes);
-    gizmoManager.gizmos.rotationGizmo.onDragObservable.add(updateShaderBoxes);
-    gizmoManager.gizmos.scaleGizmo.onDragObservable.add(updateShaderBoxes);
-    // gizmoManager.gizmos.boundingBoxGizmo.onDragObservable.add(updateShaderBoxes);
-    createBBoxMenu(scene);
+    bboxes.push(bbox);
   }
-
+  refreshBBoxOverview(gizmoManager);
   updateShaderBoxes();
 }
-
-
-
-
 
 
 
 function selectBBox(bbox, gizmoManager) {
-
   activeBBox = bbox;
-
   gizmoManager.attachToMesh(bbox);
-
+  updateBBoxMenuFromSelection();
   updateShaderBoxes();
 }
 
 
 
 
-function updateShaderBoxes() {
+export function updateShaderBoxes() {
 
   if (!pointMaterial) return;
 
@@ -361,3 +490,35 @@ function updateShaderBoxes() {
 
 }
 
+
+
+function focusCameraSmooth(camera, bbox, scene) {
+  
+  bbox.computeWorldMatrix(true);
+
+  const info = bbox.getBoundingInfo();
+  const center = info.boundingBox.centerWorld;
+  const radius = info.boundingSphere.radiusWorld;
+
+  BABYLON.Animation.CreateAndStartAnimation(
+    "camTarget",
+    camera,
+    "target",
+    60,
+    30,
+    camera.target,
+    center,
+    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+  );
+
+  BABYLON.Animation.CreateAndStartAnimation(
+    "camRadius",
+    camera,
+    "radius",
+    60,
+    30,
+    camera.radius,
+    radius * 3,
+    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+  );
+}

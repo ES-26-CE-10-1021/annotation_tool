@@ -1,10 +1,11 @@
 
+
 export function createScene(engine, canvas) {
 
   const scene = new BABYLON.Scene(engine);
 
   scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
-  scene.fogDensity = 0.001;
+  scene.fogDensity = 0.01;
 
   scene.clearColor = new BABYLON.Color4(0.8, 0.8, 0.9, 1.0);
   scene.useRightHandedSystem = true; 
@@ -26,5 +27,5 @@ export function createScene(engine, canvas) {
   );
 
 
-  return scene;
+  return {scene, camera};
 }

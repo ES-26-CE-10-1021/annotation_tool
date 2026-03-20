@@ -14,10 +14,9 @@ let currentNormals = [];
 let currentPointCount = 0;
 let currentMesh = null;
 let showNormals = true; 
-let coloringMode = 0; 
 let pointSize = 1;
-let cloudMin = new BABYLON.Vector3(-50, -50, -50);
-let cloudMax = new BABYLON.Vector3(50, 50, 50);
+let cloudMin = new BABYLON.Vector3(Infinity, Infinity, Infinity);
+let cloudMax = new BABYLON.Vector3(-Infinity, -Infinity, -Infinity);
 function createNewMesh(scene) {
 
   currentMesh = new BABYLON.Mesh("points_" + pointMeshes.length, scene);
@@ -79,18 +78,24 @@ export async function startStreaming(scene) {
     const data = new Float16Array(buffer);
 
     for (let i = 0; i < data.length; i += 6) {
-
-      currentPositions.push(
-        data[i],
-        data[i+1],
-        data[i+2]
-      );
+      const x = data[i];
+      const y = data[i+1];
+      const z = data[i+2];
+      currentPositions.push(x, y, z);
 
       currentNormals.push(
         data[i+3],
         data[i+4],
         data[i+5]
       );
+
+      cloudMin.x = Math.min(cloudMin.x, x);
+      cloudMin.y = Math.min(cloudMin.y, y);
+      cloudMin.z = Math.min(cloudMin.z, z);
+
+      cloudMax.x = Math.max(cloudMax.x, x);
+      cloudMax.y = Math.max(cloudMax.y, y);
+      cloudMax.z = Math.max(cloudMax.z, z);
 
       currentPointCount++;
 
@@ -102,9 +107,11 @@ export async function startStreaming(scene) {
 
       }
     }
+    pointMaterial.setVector3("cloudMin", cloudMin);
+    pointMaterial.setVector3("cloudMax", cloudMax);
 
     updateMesh();
-
+    
     chunk++;
   }
 }

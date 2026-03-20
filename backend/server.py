@@ -21,23 +21,36 @@ def main(args):
 
 
     # load dataset
-
+    state = {
+        "dataset": None,
+        "points": None,
+        "normals": None,
+        "annotation_path": None
+    }
     
-    dataset_dir = config['server']['data_file_path']
+    # dataset_dir = config['server']['data_file_path']
     
     global_voxel_size = config['server']['global_point_cloud_voxel_dowsampling']
     local_voxel_size = config['server']['local_point_cloud_voxel_downsampling']
     point_cloud_sampling_stride = config['server']['point_cloud_sampling_stride']
-    
+   
 
-    dataset = lidar_loader(dataset_dir, global_voxel_size, local_voxel_size, point_cloud_sampling_stride)
+    def load_dataset(dataset_path):
 
-    points = np.array(dataset.point.positions.numpy(), dtype=np.float16)
-    normals = np.array(dataset.point.normals.numpy(), dtype=np.float16)
+        ds = lidar_loader(
+            dataset_path,
+            global_voxel_size,
+            local_voxel_size,
+            point_cloud_sampling_stride
+        )
 
-    print(points.shape)
-    print(config)
-    annotation_path = Path(dataset_dir) / config['server']['annotation_file']
+        points = np.array(ds.point.positions.numpy(), dtype=np.float16)
+        normals = np.array(ds.point.normals.numpy(), dtype=np.float16)
+
+        annotation_path = dataset_path / config['server']['annotation_file']
+
+        return ds, points, normals, annotation_path
+
 
     app = Flask(
         __name__,
@@ -52,11 +65,71 @@ def main(args):
     
     @app.route("/api/config")
     def get_config():
+        print(jsonify(config))
         return jsonify(config)
+
+    @app.route("/api/datasets")
+    def list_datasets():
+        base = Path(config['server']['data_root'])
+
+        return jsonify([
+            d.name for d in base.iterdir() if d.is_dir()
+        ])
+    @app.route("/api/sequences/<dataset>")
+    def list_sequences(dataset):
+
+        base = Path(config['server']['data_root']) / dataset
+
+        return jsonify([
+            d.name for d in base.iterdir() if d.is_dir()
+        ])
+
+    @app.route("/api/lidars/<dataset>/<sequence>")
+    def list_lidars(dataset, sequence):
+
+        base = Path(config['server']['data_root']) / dataset / sequence
+
+        return jsonify([
+            d.name for d in base.iterdir() if d.is_dir()
+        ])
+
+
+
+
+    @app.route("/api/select", methods=["POST"])
+    def select():
+
+        data = request.get_json()
+
+        dataset_path = (
+            Path(config['server']['data_root']) /
+            data["dataset"] /
+            data["sequence"] /
+            data["lidar"]
+        )
+
+        ds, pts, nrm, ann = load_dataset(dataset_path)
+
+        state["dataset"] = ds
+        state["points"] = pts
+        state["normals"] = nrm
+        state["annotation_path"] = ann
+
+        print(f"Loaded dataset: {dataset_path}")
+        print(f"Points: {pts.shape}")
+
+        return jsonify({"status": "ok"})
+
 
 
     @app.route("/api/points/<int:chunk>")
     def stream_points(chunk):
+
+        if state["points"] is None:
+            return Response("No dataset selected", status=400)
+
+        points = state["points"]
+        normals = state["normals"]
 
         start = chunk * chunk_size
         end = min(start + chunk_size, len(points))
@@ -64,43 +137,41 @@ def main(args):
         if start >= len(points):
             return Response(status=204)
 
-        # data = points[start:end]
-        #
-        # return Response(data.tobytes(), mimetype="application/octet-stream")
         data = np.hstack([points[start:end], normals[start:end]]).astype(np.float16)
+
         return Response(data.tobytes(), mimetype="application/octet-stream")
 
 
     @app.route("/api/bboxes", methods=["GET"])
     def get_bboxes():
 
-        if not annotation_path.exists():
+        if state["annotation_path"] is None:
             return jsonify({"version": 1, "bboxes": []})
 
-        with open(annotation_path, "r") as f:
-            data = json.load(f)
-            print(data)
+        if not state["annotation_path"].exists():
+            return jsonify({"version": 1, "bboxes": []})
 
-        return jsonify(data) 
+        with open(state["annotation_path"], "r") as f:
+            data = json.load(f)
+
+        return jsonify(data)
+
 
     @app.route("/api/bboxes", methods=["POST"])
     def save_bboxes():
+
+        if state["annotation_path"] is None:
+            return jsonify({"error": "No dataset selected"}), 400
 
         data = request.get_json()
 
         if not data or "bboxes" not in data:
             return jsonify({"error": "Invalid format"}), 400
 
-        # Optional: validation (recommended)
-        for bbox in data["bboxes"]:
-            if "position" not in bbox:
-                return jsonify({"error": "Missing position"}), 400
-
-        with open(annotation_path, "w") as f:
+        with open(state["annotation_path"], "w") as f:
             json.dump(data, f, indent=2)
 
         return jsonify({"status": "ok"})
-
 
     app.run(debug=True) 
 
