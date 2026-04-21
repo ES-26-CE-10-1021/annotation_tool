@@ -1,6 +1,3 @@
-import { createScene } from "./scene.js";
-import { startStreaming, pointMeshes, setupKeyboard } from "./point_cloud.js";
-import {createBBoxOverview, createBBoxMenu, createBoundingBox, setupBBoxPicking, deleteBoundingBox, saveBoundingBoxes, uploadBoundingBoxes, fetchBoundingBoxes, updateShaderBoxes } from "./bbox_tool.js";
 import { loadConfig, CONFIG } from "./config.js";
 
 import { startGlobalEditor } from "./global_editor.js";
@@ -8,67 +5,53 @@ import { startGlobalEditor } from "./global_editor.js";
 
 import { createDatasetSelector } from "./dataset_selection.js";
 
-
+console.log("body:", document.body);
 await loadConfig();
 
+const app = document.createElement("div");
+app.style.display = "flex";
+app.style.flexDirection = "column";
+app.style.height = "100vh";
+document.body.appendChild(app);
+
+const topbar = document.createElement("div");
 
 
-createDatasetSelector(() => {
-  startGlobalEditor();
+
+topbar.style = `
+  height: 60px;
+  background: #020617;
+  color: white;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  justify-content: space-between;
+  border-bottom: 1px solid #1e293b;
+`;
+
+const title = document.createElement("div");
+title.innerText = "annotation";
+
+const homeBtn = document.createElement("button");
+homeBtn.innerText = "Home";
+homeBtn.style = `
+  padding: 6px 12px;
+  cursor: pointer;
+`;
+
+topbar.appendChild(title);
+topbar.appendChild(homeBtn);
+app.appendChild(topbar);
+
+const content = document.createElement("div");
+// content.style.flex = "1";
+// content.style.position = "relative";
+content.style.paddingTop = "20px";
+content.style.display = "flex";
+content.style.justifyContent = "center";   // horizontal center
+content.style.alignItems = "center";       // vertical center
+app.appendChild(content);
+
+createDatasetSelector(content, () => {
+  startGlobalEditor(content);
 });
-
-
-// const canvas = document.getElementById("renderCanvas");
-//
-// const engine = new BABYLON.Engine(canvas, true);
-//
-// engine.adaptToDeviceRatio = true;
-// const {scene, camera} = createScene(engine, canvas);
-//
-// const gizmoManager = new BABYLON.GizmoManager(scene);
-//
-//
-//
-// setupBBoxPicking(scene, gizmoManager);
-//
-//
-// gizmoManager.positionGizmoEnabled = true;
-// gizmoManager.rotationGizmoEnabled = true;
-// gizmoManager.scaleGizmoEnabled = true;
-// gizmoManager.boundingBoxGizmoEnabled = false;
-//
-// gizmoManager.gizmos.rotationGizmo.updateGizmoRotationToMatchAttachedMesh = false;
-// gizmoManager.clearGizmoOnEmptyPointerEvent = true;
-//
-// startStreaming(scene);
-// setupKeyboard(scene);
-// createBBoxMenu(scene);
-// fetchBoundingBoxes(scene, gizmoManager);
-// createBBoxOverview(scene, gizmoManager, camera)
-//
-// gizmoManager.gizmos.positionGizmo.onDragObservable.add(updateShaderBoxes);
-// gizmoManager.gizmos.rotationGizmo.onDragObservable.add(updateShaderBoxes);
-// gizmoManager.gizmos.scaleGizmo.onDragObservable.add(updateShaderBoxes);
-// document.getElementById("bboxBtn").onclick = () => {
-//   createBoundingBox(scene, gizmoManager);
-// };
-//
-// document.getElementById("rmBboxBtn").onclick = () => {
-//   deleteBoundingBox(gizmoManager);
-// }
-//
-//
-// document.getElementById("saveBboxBtn").onclick = () => {
-//   uploadBoundingBoxes();
-// }
-//
-//
-//
-// engine.runRenderLoop(() => {
-//
-//   if (window.updateBBoxShader)
-//     window.updateBBoxShader();
-//
-//   scene.render();
-//
-// });

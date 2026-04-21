@@ -11,13 +11,13 @@ let isLoading = false;
 let breadcrumbEl;
 let overlay;
 
-async function showDatasets(container) {
+async function showDatasets(container, onDone) {
 
   updateBreadcrumb();
   container.innerHTML = "";
   const res = await fetch("/api/datasets");
   const datasets = await res.json();
-
+  console.log("datasets:", datasets);
   datasets.forEach(name => {
 
     const btn = createButton(name);
@@ -25,7 +25,7 @@ async function showDatasets(container) {
     btn.onclick = () => {
       selected.dataset = name;
       container.innerHTML = "";
-      showSequences(container);
+      showSequences(container, onDone);
     };
 
     container.appendChild(btn);
@@ -33,20 +33,33 @@ async function showDatasets(container) {
 }
 
 
-async function showSequences(container) {
+
+
+async function showSequences(container, onDone) {
+
+  updateBreadcrumb();
+  container.innerHTML = "";
+
+  addBack(container, () => {
+    console.log("back from show sequences");
+    selected.sequence = null;
+    selected.lidar = null;
+    selected.dataset = null;
+    updateBreadcrumb();
+    showDatasets(container, onDone);
+  });
 
   const res = await fetch(`/api/sequences/${selected.dataset}`);
   const sequences = await res.json();
 
   sequences.forEach(name => {
-
     const btn = createButton(name);
 
     btn.onclick = () => {
       selected.sequence = name;
       updateBreadcrumb();
       container.innerHTML = "";
-      showLidars(container);
+      showLidars(container, onDone);
     };
 
     container.appendChild(btn);
@@ -54,8 +67,19 @@ async function showSequences(container) {
 }
 
 
+async function showLidars(container, onDone) {
+  
+  updateBreadcrumb();
+  container.innerHTML = "";
 
-async function showLidars(container) {
+
+  addBack(container, () => {
+    console.log("back from show lidars")
+    selected.sequence = null;
+    selected.lidar = null;
+    updateBreadcrumb();
+    showSequences(container, onDone);
+  });
 
   const res = await fetch(
     `/api/lidars/${selected.dataset}/${selected.sequence}`
@@ -83,10 +107,9 @@ async function showLidars(container) {
       });
       
       container.remove();
-      overlay.remove();
       console.log("lidar selected");
       hideLoadingOverlay();
-      startGlobalEditor();
+      onDone();
     };
 
     container.appendChild(btn);
@@ -103,10 +126,25 @@ function createButton(text) {
 
   const btn = document.createElement("button");
 
-  btn.innerText = text;
+  let inner_text_short = ""; 
+  const max_length = 25;
 
-  btn.style.margin = "10px";
-  btn.style.padding = "10px 20px";
+  
+  if (max_length <= text.length){
+    console.log("shortening text")
+    inner_text_short += text.slice(0, max_length);
+    inner_text_short += "...";
+  }
+  else{
+    inner_text_short = text
+  }
+
+  console.log(inner_text_short)
+
+  btn.innerText = inner_text_short;
+  btn.title = text;
+  btn.style.margin = "5px";
+  btn.style.padding = "5px 10px";
   btn.style.fontSize = "16px";
   btn.style.cursor = "pointer";
 
@@ -139,36 +177,45 @@ function hideLoadingOverlay() {
 }
 
 
+function shorten(str, max = 15) {
+  return str.length > max ? str.slice(0, max) + "…" : str;
+}
 
 function updateBreadcrumb() {
+  console.log("updating breadcrumb")
   if (!breadcrumbEl) return;
+  console.log("new breadcrumb state", selected.dataset, selected.sequence, selected.lidar)
 
   const parts = [
     selected.dataset,
     selected.sequence,
     selected.lidar
-  ].filter(Boolean);
+  ].filter(Boolean)
+   .map(p => shorten(p));
 
   breadcrumbEl.innerText =
     parts.length > 0 ? parts.join(" / ") : "Select a dataset";
 }
 
 
-export function createDatasetSelector(onDone) {
+export function createDatasetSelector(content, onDone) {
 
-  overlay = document.createElement("div");
+  console.log("createDatasetSelector called");
+  // overlay = document.createElement("div");
+  //
+  // overlay.style = `
+  //   position: fixed;
+  //   inset: 0;
+  //   background: #0f172a;
+  //   display: flex;
+  //   flex-direction: column;
+  //   align-items: center;
+  //   justify-content: center;
+  //   z-index: 999;
+  // `;
+  //
 
-  overlay.style = `
-    position: fixed;
-    inset: 0;
-    background: #0f172a;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 999;
-  `;
-
+  content.innerHTML = "";
 
   const card = document.createElement("div");
 
@@ -205,11 +252,21 @@ export function createDatasetSelector(onDone) {
 
 
   card.appendChild(breadcrumb);
-  const content = document.createElement("div");
-  card.appendChild(content);
-  showDatasets(content);
+  
+  // card.appendChild(content);
+  
+  content.appendChild(card);
+  const contentArea = document.createElement("div");
 
-  overlay.appendChild(card);
-  document.body.appendChild(overlay);
+  contentArea.style.display = "flex";
+  contentArea.style.flexDirection = "column";
+  contentArea.style.alignItems = "center";
+  contentArea.style.width = "100%";
+  contentArea.style.marginTop = "20px"; 
+  card.appendChild(contentArea);
+
+  showDatasets(contentArea, onDone);
+
+  // document.body.appendChild(content);
 
 }
