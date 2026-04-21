@@ -6,7 +6,7 @@ This document describes the overall structure of point cloud datasets captured i
 
 ## 1. File Structure
 
-Files are organized by scene, then by sensor. Each file uses a zero-padded 4-digit index (e.g. `0001`, `0002`) to denote synchronized captures across all sensors — meaning `coord_0002.npy`, `image_0002.npy`, and `meta_0002.json` all correspond to the same point in time, without requiring timestamp comparisons at later stages.
+Files are organized by scene, then by sensor. Each file uses a zero-padded 4-digit index (e.g. `000001`, `000002`) to denote synchronized captures across all sensors — meaning `coord_000002.npy`, `image_000002.npy`, and `meta_000002.json` all correspond to the same point in time, without requiring timestamp comparisons at later stages.
 
 ```
 dataset/
@@ -18,23 +18,23 @@ dataset/
 │   │
 │   ├── ls_lidar/                       
 │   │   ├── coords/
-│   │   │   ├── coord_0001.npy          
-│   │   │   └── coord_0002.npy
+│   │   │   ├── coord_000001.npy          
+│   │   │   └── coord_000002.npy
 │   │   ├── segment/
-│   │   │   ├── segment_0001.npy        
-│   │   │   └── segment_0002.npy
+│   │   │   ├── segment_000001.npy        
+│   │   │   └── segment_000002.npy
 │   │   ├── instances/
-│   │   │   ├── instance_0001.npy       
-│   │   │   └── instance_0002.npy
+│   │   │   ├── instance_000001.npy       
+│   │   │   └── instance_000002.npy
 │   │   ├── transforms/
-│   │   │   ├── transform_0001.npy      
-│   │   │   └── transform_0002.npy
+│   │   │   ├── transform_000001.npy      
+│   │   │   └── transform_000002.npy
 │   │   ├── meta/
-│   │   │   ├── meta_0001.json          
-│   │   │   └── meta_0002.json
+│   │   │   ├── meta_000001.json          
+│   │   │   └── meta_000002.json
 │   │   └── bounding_boxes/
-│   │       ├── bboxes_0001.json        
-│   │       └── bboxes_0002.json
+│   │       ├── bboxes_000001.json        
+│   │       └── bboxes_000002.json
 │   │
 │   ├── os_lidar/                       
 │   │   ├── coords/
@@ -68,8 +68,8 @@ All files sharing an index number (e.g. `_0002`) are captured at the same timest
 
 | Index | LS LiDAR | OS LiDAR | Camera |
 |-------|----------|----------|--------|
-| `0001` | `coord_0001.npy`, `meta_0001.json`, ... | `coord_0001.npy`, ... | `image_0001.npy`, ... |
-| `0002` | `coord_0002.npy`, `meta_0002.json`, ... | `coord_0002.npy`, ... | `image_0002.npy`, ... |
+| `0001` | `coord_000001.npy`, `meta_000001.json`, ... | `coord_000001.npy`, ... | `image_000001.npy`, ... |
+| `0002` | `coord_000002.npy`, `meta_000002.json`, ... | `coord_000002.npy`, ... | `image_000002.npy`, ... |
 
 ---
 
@@ -167,7 +167,7 @@ Global bounding boxes annotated in the superimposed/global coordinate frame. The
 
 ---
 
-### 3.4 `meta_xxxx.json`
+### 3.4 `meta_xxxxxx.json`
 
 Per-frame metadata file for each sensor modality. Links each frame back to its source rosbag and original timestamp.
 
@@ -185,7 +185,7 @@ Per-frame metadata file for each sensor modality. Links each frame back to its s
 
 ---
 
-### 3.5 `bboxes_xxxx.json`
+### 3.5 `bboxes_xxxxxx.json`
 
 Per-frame local bounding boxes, expressed in the coordinate frame of the LiDAR sensor for that frame. Each box includes inlier point counts and visibility flags, which can be used to filter training samples by difficulty.
 
@@ -244,7 +244,7 @@ All `.npy` files follow consistent shape and dtype conventions.
 | Element | Convention | Example |
 |---------|-----------|---------|
 | Scene directories | `scene_NNN` (zero-padded 3 digits) | `scene_001` |
-| Frame index | `_XXXX` (zero-padded 4 digits) | `coord_0012.npy` |
+| Frame index | `_XXXXXX` (zero-padded 6 digits) | `coord_000012.npy` |
 | LiDAR sensors | `{model}_lidar` | `ls_lidar`, `os_lidar` |
 | Camera sensors | `camera_sensor_{id}` | `camera_sensor_1` |
 | DINO features | `dino_{model}_feat/` | `dino_vitb14_feat/` |

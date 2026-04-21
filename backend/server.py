@@ -5,7 +5,7 @@ from pathlib import Path
 
 from flask_compress import Compress
 
-from backend.loaders.dataset_loader import lidar_loader
+from backend.loaders.agco_loader import lidar_loader
 import argparse
 import yaml
 import json
@@ -33,12 +33,15 @@ def main(args):
     global_voxel_size = config['server']['global_point_cloud_voxel_dowsampling']
     local_voxel_size = config['server']['local_point_cloud_voxel_downsampling']
     point_cloud_sampling_stride = config['server']['point_cloud_sampling_stride']
+    coord_dir = config['server']['coord_dir_name']
+    lidar_types = config['server']['lidar_types']
    
 
-    def load_dataset(dataset_path):
+    def load_dataset(dataset_path, lidar):
 
         ds = lidar_loader(
             dataset_path,
+            lidar,
             global_voxel_size,
             local_voxel_size,
             point_cloud_sampling_stride
@@ -90,7 +93,7 @@ def main(args):
         base = Path(config['server']['data_root']) / dataset / sequence
 
         return jsonify([
-            d.name for d in base.iterdir() if d.is_dir()
+            d.name for d in base.iterdir() if (d.is_dir() and d.name in lidar_types)
         ])
 
 
@@ -104,11 +107,10 @@ def main(args):
         dataset_path = (
             Path(config['server']['data_root']) /
             data["dataset"] /
-            data["sequence"] /
-            data["lidar"]
+            data["sequence"]
         )
 
-        ds, pts, nrm, ann = load_dataset(dataset_path)
+        ds, pts, nrm, ann = load_dataset(dataset_path, lidar = data["lidar"])
 
         state["dataset"] = ds
         state["points"] = pts
@@ -146,10 +148,10 @@ def main(args):
     def get_bboxes():
 
         if state["annotation_path"] is None:
-            return jsonify({"version": 1, "bboxes": []})
+            return jsonify({"version": 1, "annotations": []})
 
         if not state["annotation_path"].exists():
-            return jsonify({"version": 1, "bboxes": []})
+            return jsonify({"version": 1, "annotations": []})
 
         with open(state["annotation_path"], "r") as f:
             data = json.load(f)
@@ -165,7 +167,7 @@ def main(args):
 
         data = request.get_json()
 
-        if not data or "bboxes" not in data:
+        if not data or "annotations" not in data:
             return jsonify({"error": "Invalid format"}), 400
 
         with open(state["annotation_path"], "w") as f:

@@ -1,12 +1,12 @@
 server:
-  point_cloud_sampling_stride: 30 
-  local_point_cloud_voxel_downsampling: 0.05 
-  global_point_cloud_voxel_dowsampling: 0.01
-  data_file_path: "/media/ai/T7/agco_ttcbtg/val/multibag_2025-10-22-11-27-26_5_annotation2025-10-22-11-28-26_6_annotation2025-10-22-11-29-26_7_annotation/_lslidar_point_cloud/"
-  data_root: "/media/ai/T7/agco_ttcbtg/"
+  point_cloud_sampling_stride: 20 
+  local_point_cloud_voxel_downsampling: 0.02 
+  global_point_cloud_voxel_dowsampling: 0.03
+  data_root: "/media/ai/T7/agco2026/"
   chunk_size: 200000
   annotation_file: "bboxes.json"
-
+  coord_dir_name: "pointcloud_raw"
+  lidar_types: ["lslidar","rslidar","ouster"]
 
 frontend: 
   label_dict:
