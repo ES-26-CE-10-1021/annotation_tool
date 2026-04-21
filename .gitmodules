@@ -1,0 +1,3 @@
+[submodule "backend/sensor_interface"]
+	path = backend/sensor_interface
+	url = git@bitbucket.org:sensorsandautonomy/sensor_interface.git
