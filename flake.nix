@@ -24,11 +24,15 @@
         pkgs.mesa
             # Open3D runtime deps
         pkgs.libGL
-        pkgs.xorg.libX11
-        pkgs.xorg.libXrandr
-        pkgs.xorg.libXcursor
-        pkgs.xorg.libXi
-        pkgs.xorg.libXinerama
+        pkgs.libX11
+        pkgs.libXrandr
+        pkgs.libXcursor
+        pkgs.libXi
+        pkgs.libXinerama
+        pkgs.zlib
+        pkgs.libxcb
+        pkgs.glib
+
         ];
 
       shellHook = ''
@@ -38,11 +42,14 @@
           pkgs.systemd
           pkgs.libGLU
           pkgs.mesa
-          pkgs.xorg.libX11
-          pkgs.xorg.libXrandr
-          pkgs.xorg.libXcursor
-          pkgs.xorg.libXi
-          pkgs.xorg.libXinerama
+          pkgs.libX11
+          pkgs.libXrandr
+          pkgs.libXcursor
+          pkgs.libXi
+          pkgs.libXinerama
+          pkgs.zlib
+          pkgs.libxcb
+          pkgs.glib
         ]}:$LD_LIBRARY_PATH
 
         echo "Dev environment ready"
