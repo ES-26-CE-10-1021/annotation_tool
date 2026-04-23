@@ -35,14 +35,20 @@ class Propagator:
 
         for annotation in self.global_annotations["annotations"]: 
             self.functional_annotations.append(load_annotations(annotation))
+    
+    def get_local_annotations(self, pcd, world_frame):
+        local_annot_assets = [] 
         
-        for annotation in self.annotation_flat_list(): 
-            print(annotation.note)
-        
-        print("________________")
-        for annotation in self.functional_annotations: 
-            print(annotation)
+        def get_local_annotation(global_annotation: GlobalAnnotation, pcd, world_frame, parent_local=None):
+            local_annotation = global_annotation.get_local_annotation(pcd, world_frame)
+            for global_child in global_annotation.children: 
+                local_annotation.children.append(get_local_annotation(global_child, pcd, world_frame, local_annotation))
+                local_annotation.parent = parent_local 
+             
+        for global_annotation in self.functional_annotations:
+            local_annot_assets.append(get_local_annotation(global_annotation, pcd, world_frame))
 
+        return local_annot_assets 
 
     def annotation_flat_list(self) -> List[GlobalAnnotation]:  
         flat_list = []
@@ -89,6 +95,8 @@ if __name__ == "__main__":
     )
     
     
+    sequence_local_annotations = []
+
     for i in range(len(ds)): 
         frame = ds[i]
         print(f"got frame {frame}")
@@ -105,14 +113,18 @@ if __name__ == "__main__":
 
         pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(scan.to_rtk())) 
 
+                
         local_annot_assets = [] 
-
-        for annot in prop.annotation_flat_list():
-            local_annot_assets.append(annot.get_local_annotation(pcd, T_world).asset)
+        
+        
+        for global_annot in prop.functional_annotations:
+            global_annot: GlobalAnnotation = global_annot 
+            local_annot_assets.append(global_annot.get_local_annotation(pcd, np.linalg.inv(T_world)))
+        
+        sequence_local_annotations.append(local_annot_assets)
 
         
-        o3d.visualization.draw_geometries(local_annot_assets + [pcd])
-
+    print("global annotations propagated to point clouds")
 
 
 
