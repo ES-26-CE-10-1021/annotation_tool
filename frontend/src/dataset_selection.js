@@ -105,6 +105,15 @@ async function showLidars(container, onDone) {
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(selected)
       });
+
+      const params = new URLSearchParams({
+        mode: "global",
+        dataset: selected.dataset,
+        sequence: selected.sequence,
+        lidar: selected.lidar
+      });
+
+      window.history.replaceState({}, "", `?${params}`);
       
       container.remove();
       console.log("lidar selected");
