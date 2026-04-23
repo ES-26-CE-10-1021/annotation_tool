@@ -9,6 +9,7 @@ from backend.loaders.agco_loader import lidar_loader
 import argparse
 import yaml
 import json
+from scipy.spatial.transform import Rotation as Rot
 
 
 
@@ -25,8 +26,20 @@ def main(args):
         "dataset": None,
         "points": None,
         "normals": None,
-        "annotation_path": None
+        "annotation_path": None,
+        "R_level": None,
     }
+
+    def _transform_tree(nodes, R):
+        out = []
+        for n in nodes:
+            m = dict(n)
+            m["position"] = R.apply(np.asarray(n["position"], dtype=np.float64)).tolist()
+            q_in = Rot.from_quat(n["rotationQuaternion"])
+            m["rotationQuaternion"] = (R * q_in).as_quat().tolist()
+            m["children"] = _transform_tree(n.get("children", []), R)
+            out.append(m)
+        return out
     
     # dataset_dir = config['server']['data_file_path']
     
@@ -39,7 +52,7 @@ def main(args):
 
     def load_dataset(dataset_path, lidar):
 
-        ds = lidar_loader(
+        ds, R_level = lidar_loader(
             dataset_path,
             lidar,
             global_voxel_size,
@@ -52,7 +65,7 @@ def main(args):
 
         annotation_path = dataset_path / config['server']['annotation_file']
 
-        return ds, points, normals, annotation_path
+        return ds, points, normals, annotation_path, R_level
 
 
     app = Flask(
@@ -110,12 +123,13 @@ def main(args):
             data["sequence"]
         )
 
-        ds, pts, nrm, ann = load_dataset(dataset_path, lidar = data["lidar"])
+        ds, pts, nrm, ann, R_level = load_dataset(dataset_path, lidar = data["lidar"])
 
         state["dataset"] = ds
         state["points"] = pts
         state["normals"] = nrm
         state["annotation_path"] = ann
+        state["R_level"] = R_level
 
         print(f"Loaded dataset: {dataset_path}")
         print(f"Points: {pts.shape}")
@@ -156,6 +170,11 @@ def main(args):
         with open(state["annotation_path"], "r") as f:
             data = json.load(f)
 
+        # re-level raw-world boxes into display frame
+        R_level = state["R_level"]
+        if R_level is not None and "annotations" in data:
+            data = {**data, "annotations": _transform_tree(data["annotations"], R_level)}
+
         return jsonify(data)
 
 
@@ -170,8 +189,26 @@ def main(args):
         if not data or "annotations" not in data:
             return jsonify({"error": "Invalid format"}), 400
 
+        R_level = state["R_level"]
+        if R_level is None:
+            return jsonify({"error": "No gravity alignment available"}), 400
+
+        snapshot_path = state["annotation_path"].parent / "gravity_align.npz"
+        R_mat = R_level.as_matrix()
+        if snapshot_path.exists():
+            stored = np.load(snapshot_path)["R_level"]
+            if not np.allclose(stored, R_mat, atol=1e-6):
+                return jsonify({
+                    "error": "gravity_align.npz mismatch — PoseProvider has shifted; aborting save"
+                }), 409
+        else:
+            np.savez(snapshot_path, R_level=R_mat)
+
+        # un-level display-frame boxes back to raw world before persisting
+        raw = {**data, "annotations": _transform_tree(data["annotations"], R_level.inv())}
+
         with open(state["annotation_path"], "w") as f:
-            json.dump(data, f, indent=2)
+            json.dump(raw, f, indent=2)
 
         return jsonify({"status": "ok"})
 

@@ -29,23 +29,25 @@ def lidar_loader(dataset_split, lidar, global_voxel_size:float, local_voxel_size
         max_lat_std=0.02,
     )
 
+    R_level = ds.pose_provider.world_level_rotation
+
     positions = []
     normals = []
-    for i in tqdm.tqdm(range(len(ds))): 
+    for i in tqdm.tqdm(range(len(ds))):
         if i % stride  == 0:
             frame = ds[i]
             print(f"got frame {frame}")
 
             T_world = frame.T_world_body
             pos, quat = frame.pose
-            
+
             print(f"frame transforms, world{T_world}, pos{pos}, quat{quat}")
 
             scan = frame.lidar(lidar)
-            
+
             print(f"got scan with {scan}")
 
-            pts_world = scan.to_world(undistort=False)
+            pts_world = scan.to_world(undistort=False, gravity_align=True)
 
             # segment = np.load(os.path.join(lidar_dir,"segment",filename))
             # bounding_boxes_points = np.load(os.path.join(lidar_dir,"bounding_boxes_points",filename))
@@ -70,7 +72,7 @@ def lidar_loader(dataset_split, lidar, global_voxel_size:float, local_voxel_size
      
     # o3d.visualization.draw_geometries([global_pcd.to_legacy()])
 
-    return global_pcd
+    return global_pcd, R_level
 
 
 

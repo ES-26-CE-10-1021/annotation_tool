@@ -78,7 +78,7 @@ if __name__ == "__main__":
     
     lidar = "rslidar"
 
-    pointcloud = lidar_loader(dataset_split, lidar, global_voxel_size=0.7, local_voxel_size=0.5, stride=1)
+    pointcloud, _R_level = lidar_loader(dataset_split, lidar, global_voxel_size=0.7, local_voxel_size=0.5, stride=1)
 
     annotation_assets = []
 
