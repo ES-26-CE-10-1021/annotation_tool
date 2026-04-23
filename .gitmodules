@@ -1,3 +1,6 @@
 [submodule "backend/sensor_interface"]
 	path = backend/sensor_interface
 	url = git@bitbucket.org:sensorsandautonomy/sensor_interface.git
+[submodule "backend/bbox_annotations"]
+	path = backend/bbox_annotations
+	url = git@github.com:ES-26-CE-10-1021/bbox_annotations.git
