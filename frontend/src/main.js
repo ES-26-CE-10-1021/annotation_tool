@@ -1,8 +1,5 @@
 import { loadConfig, CONFIG } from "./config.js";
-
 import { startGlobalEditor } from "./global_editor.js";
-
-
 import { createDatasetSelector } from "./dataset_selection.js";
 
 console.log("body:", document.body);
@@ -70,19 +67,28 @@ const initial = getInitialStateFromURL();
 
 if (initial) {
   // restore directly into editor
-  await fetch("/api/select", {
+  // await fetch("/api/select", {
+  //   method: "POST",
+  //   headers: {"Content-Type": "application/json"},
+  //   body: JSON.stringify(initial)
+  // });
+  //
+  const res = await fetch("/api/select", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify(initial)
   });
 
-  startGlobalEditor(content);
+  const data = await res.json();
+
+  // store globally
+  window.datasetMeta = data;
+
+  startGlobalEditor(content,data);
+
 } else {
   createDatasetSelector(content, () => {
-    startGlobalEditor(content);
+    startGlobalEditor(content, data);
   });
 }
-//
-// createDatasetSelector(content, () => {
-//   startGlobalEditor(content);
-// });
+
