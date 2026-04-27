@@ -1,12 +1,23 @@
 import { loadConfig, CONFIG } from "./config.js";
-
 import { startGlobalEditor } from "./global_editor.js";
-
-
 import { createDatasetSelector } from "./dataset_selection.js";
 
 console.log("body:", document.body);
 await loadConfig();
+
+function getInitialStateFromURL() {
+  const params = new URLSearchParams(window.location.search);
+
+  const dataset = params.get("dataset");
+  const sequence = params.get("sequence");
+  const lidar = params.get("lidar");
+  const mode = params.get("mode");
+
+  if (!dataset || !sequence || !lidar) return null;
+
+  return { dataset, sequence, lidar, mode };
+}
+
 
 const app = document.createElement("div");
 app.style.display = "flex";
@@ -52,6 +63,32 @@ content.style.justifyContent = "center";   // horizontal center
 content.style.alignItems = "center";       // vertical center
 app.appendChild(content);
 
-createDatasetSelector(content, () => {
-  startGlobalEditor(content);
-});
+const initial = getInitialStateFromURL();
+
+if (initial) {
+  // restore directly into editor
+  // await fetch("/api/select", {
+  //   method: "POST",
+  //   headers: {"Content-Type": "application/json"},
+  //   body: JSON.stringify(initial)
+  // });
+  //
+  const res = await fetch("/api/select", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(initial)
+  });
+
+  const data = await res.json();
+
+  // store globally
+  window.datasetMeta = data;
+
+  startGlobalEditor(content,data);
+
+} else {
+  createDatasetSelector(content, () => {
+    startGlobalEditor(content, data);
+  });
+}
+

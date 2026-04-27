@@ -17,8 +17,9 @@ let showNormals = true;
 let pointSize = 1;
 let cloudMin = new BABYLON.Vector3(Infinity, Infinity, Infinity);
 let cloudMax = new BABYLON.Vector3(-Infinity, -Infinity, -Infinity);
-function createNewMesh(scene) {
 
+
+function createNewMesh(scene) {
   currentMesh = new BABYLON.Mesh("points_" + pointMeshes.length, scene);
   console.log("creating new meash to contain all the points")
   if (!pointMaterial) {
