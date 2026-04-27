@@ -1,9 +1,101 @@
 import * as GUI from "@babylonjs/gui";
 import { createScene } from "./scene.js";
-import { startStreaming, setupKeyboard } from "./point_cloud.js";
-import {createAnnotationOverview, createAnnotationMenu, setupAnnotationPicking, updateShaderBoxes, uploadAnnotations, fetchAnnotations} from "./bbox_tool.js";
+import { startStreaming, setupKeyboard, pointMeshes } from "./point_cloud.js";
+import {createAnnotationOverview, createAnnotationMenu, setupAnnotationPicking, updateShaderBoxes, uploadAnnotations, fetchAnnotations, setAnnotationUIVisible, setAnnotationMeshesVisible} from "./bbox_tool.js";
 
+import { createScrubberMenu, setScrubberUIVisible } from "./local_viewer.js";
+
+
+// ---- Engine + Scene ----
 let engine;
+let scene;
+let camera;
+let gizmoManager;
+let datasetMeta;
+
+
+// ---- Mode state ----
+let currentMode = "global";
+
+
+// ---- Guards ----
+let streamingActive = false;
+
+// --------------------------------------------------
+// Cleanup functions
+// --------------------------------------------------
+
+function clearGlobalMeshes() {
+  console.log("Clearing global meshes");
+
+  for (const mesh of pointMeshes) {
+    mesh.dispose();
+  }
+  pointMeshes.length = 0;
+
+  streamingActive = false;
+}
+
+function clearLocalMeshes() {
+  console.log("Clearing local meshes");
+
+  for (const mesh of localMeshCache.values()) {
+    mesh.dispose();
+  }
+  localMeshCache.clear();
+}
+
+// --------------------------------------------------
+// Local mode placeholder (you will expand this)
+// --------------------------------------------------
+
+function initLocalViewer(scene) {
+  console.log("Initializing local viewer");
+  createScrubberMenu(scene, datasetMeta);
+
+  // TODO: replace with real local frame loading
+  // This is just a placeholder so switching works
+}
+
+// --------------------------------------------------
+// Mode switching
+// --------------------------------------------------
+
+function switchMode(mode) {
+  if (mode === currentMode) return;
+
+  console.log("Switching mode:", mode);
+
+  if (mode === "global") {
+    clearLocalMeshes();
+    setAnnotationUIVisible(true);
+    setAnnotationMeshesVisible(true);
+    setScrubberUIVisible(false)
+
+    if (!streamingActive) {
+      startStreaming(scene);
+      streamingActive = true;
+    }
+  }
+
+  if (mode === "local") {
+    setAnnotationUIVisible(false);
+    setAnnotationMeshesVisible(false);
+    setScrubberUIVisible(true);
+    clearGlobalMeshes();
+    initLocalViewer(scene);
+  }
+
+  // update URL
+  const params = new URLSearchParams(window.location.search);
+  params.set("mode", mode);
+  window.history.replaceState({}, "", `?${params}`);
+
+  currentMode = mode;
+}
+
+
+
 
 function createTopMenu(scene){
   const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI", true, scene);
@@ -42,14 +134,38 @@ function createTopMenu(scene){
 
   panel.addControl(saveBtn);
 
+  const globalViewerBtn = GUI.Button.CreateSimpleButton("globalViewer", "global view")
+  globalViewerBtn.width = "175px";
+  globalViewerBtn.height = "90%";
+  globalViewerBtn.color = "white";
+  globalViewerBtn.thickness = 0;
+  globalViewerBtn.background = "#555555";
+  globalViewerBtn.cornerRadius = 5;
+  globalViewerBtn.onPointerClickObservable.add(() => {
+    switchMode("global");
+  });
+  panel.addControl(globalViewerBtn);
+
+  const sequenceViewerBtn = GUI.Button.CreateSimpleButton("seqenceViewer", "sequential view")
+  sequenceViewerBtn.width = "175px";
+  sequenceViewerBtn.height = "90%";
+  sequenceViewerBtn.color = "white";
+  sequenceViewerBtn.thickness = 0;
+  sequenceViewerBtn.background = "#555555";
+  sequenceViewerBtn.cornerRadius = 5;
+  sequenceViewerBtn.onPointerClickObservable.add(() => {
+    switchMode("local");
+  });
+  panel.addControl(sequenceViewerBtn);
 
 }
 
 
-export function startGlobalEditor(container) {
+export function startGlobalEditor(container, meta) {
   console.log("entering global editior")
   container.style.paddingTop = "0px";
   container.innerHTML = "";
+  datasetMeta = meta;
 
   const root = document.createElement("div");
   root.style = `
@@ -77,8 +193,9 @@ export function startGlobalEditor(container) {
     adaptToDeviceRatio: true
   });
 
-  const { scene, camera } = createScene(engine, canvas);
-
+  const sceneData = createScene(engine, canvas);
+  scene = sceneData.scene;
+  camera = sceneData.camera;
   const gizmoManager = new BABYLON.GizmoManager(scene);
 
   setupAnnotationPicking(scene, gizmoManager);
@@ -110,3 +227,4 @@ export function startGlobalEditor(container) {
     scene.render();
   });
 }
+

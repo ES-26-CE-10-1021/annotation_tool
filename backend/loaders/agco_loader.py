@@ -26,7 +26,6 @@ def lidar_loader(dataset_split, lidar, global_voxel_size:float, local_voxel_size
     ds = Dataset(
         data_dir=dataset_split,
         sensor_config="backend/sensor_interface/visualization/calibration/march_12_calibration.yaml",
-        max_lat_std=0.02,
     )
 
     R_level = ds.pose_provider.world_level_rotation

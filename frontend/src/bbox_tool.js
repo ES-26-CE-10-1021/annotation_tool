@@ -6,7 +6,6 @@ let labelGroup;
 let instanceInput;
 let instanceLabel;
 let noteInput;
-let annotationOverviewPanel; 
 let cameraRef = null;
 let sceneRef = null; 
 
@@ -24,7 +23,8 @@ const CLASS_COLORS = {
   6:[0,1,1]
 };
 
-
+let annotationMenuPanel = null;
+let annotationOverviewPanel = null;
 
 const annotationAssets = []; 
 let activeAnnotationAsset = null; 
@@ -83,7 +83,8 @@ function collectByType(root, type, out = []) {
 
 export function createAnnotationOverview(scene, gizmoManager, camera) {
   const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI", true, scene);
-  const panel = new GUI.StackPanel(); 
+  annotationOverviewPanel = new GUI.StackPanel(); 
+  const panel = annotationOverviewPanel;
   panel.width = "150px";
   panel.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
   panel.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_CENTER;
@@ -154,7 +155,7 @@ function addAnnotationNode(annotation, gizmoManager, depth = 0) {
   btn.onPointerClickObservable.add(() => {
     selectAnnotationAsset(annotation, gizmoManager);
     focusCameraSmooth(cameraRef, annotation.mesh, sceneRef);
-    refreshAnnotationOverview(gizmoManager); // 🔥 re-render
+    refreshAnnotationOverview(gizmoManager); 
   });
 
   annotationOverviewPanel.addControl(btn);
@@ -207,8 +208,9 @@ function refreshAnnotationOverview(gizmoManager) {
 export function createAnnotationMenu(scene, gizmoManager) {
 
   const gui = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI", true, scene);
-
-  const panel = new GUI.StackPanel()
+  
+  annotationMenuPanel = new GUI.StackPanel();
+  const panel = annotationMenuPanel;  
   panel.width = "200px";
   panel.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
   panel.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_CENTER;
@@ -770,4 +772,31 @@ function focusCameraSmooth(camera, bbox, scene) {
     radius * 3,
     BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
   );
+}
+
+
+export function setAnnotationUIVisible(visible) {
+  if (annotationMenuPanel) {
+    annotationMenuPanel.isVisible = visible;
+  }
+
+  if (annotationOverviewPanel) {
+    annotationOverviewPanel.isVisible = visible;
+  }
+}
+
+
+export function setAnnotationMeshesVisible(visible) {
+  function traverse(assets) {
+    for (const asset of assets) {
+      if (asset.mesh) {
+        asset.mesh.setEnabled(visible);
+      }
+      if (asset.children.length > 0) {
+        traverse(asset.children);
+      }
+    }
+  }
+
+  traverse(annotationAssets);
 }
