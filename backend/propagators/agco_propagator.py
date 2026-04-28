@@ -88,7 +88,7 @@ class Propagator:
             for global_annot in self.functional_annotations:
                 global_annot: GlobalAnnotation = global_annot 
                 
-                local_annotation = global_annot.get_local_annotation(pcd, np.linalg.inv(T_world))
+                local_annotation = global_annot.get_local_annotation(pcd, T_world)
                 local_annot_assets.append(local_annotation)
         
                 local_annotation_dict["annotations"].append(local_annotation.to_dict()) 
@@ -101,7 +101,7 @@ class Propagator:
 
             filename = os.path.join(
                 folder,
-                f"{frame.timestamp}.json"
+                scan.filename.replace("npy", "json")
             )
 
             with open(filename, "w") as f:
@@ -114,12 +114,12 @@ class Propagator:
 
 
 if __name__ == "__main__": 
-    test_annotations_fp = "/media/ai/T7/agco2026/static_2/split_2/bboxes.json"
+    test_annotations_fp = "/media/ai/T7/agco_test_set/agco2026/static_2/split_2/bboxes.json"
     
     with open(test_annotations_fp, 'r') as annot:
         prop = Propagator(annot)
     
-    dataset_split = "/media/ai/T7/agco2026/static_2/split_2/"
+    dataset_split = "/media/ai/T7/agco_test_set/agco2026/static_2/split_2/"
     
     from backend.loaders.agco_loader import lidar_loader 
     
@@ -160,17 +160,17 @@ if __name__ == "__main__":
 
         pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(scan.to_rtk())) 
         
-        o3d.visualization.draw_geometries([pcd, o3d.geometry.TriangleMesh.create_coordinate_frame()])
              
         local_annot_assets = [] 
         
         
         for global_annot in prop.functional_annotations:
             global_annot: GlobalAnnotation = global_annot 
-            local_annot_assets.append(global_annot.get_local_annotation(pcd, np.linalg.inv(T_world)))
+            local_annot_assets.append(global_annot.get_local_annotation(pcd, np.linalg.inv(T_world)).asset)
         
         sequence_local_annotations.append(local_annot_assets)
         
+        o3d.visualization.draw_geometries(local_annot_assets + [pcd, o3d.geometry.TriangleMesh.create_coordinate_frame()])
     print("global annotations propagated to point clouds")
 
 

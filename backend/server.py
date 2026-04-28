@@ -53,6 +53,7 @@ def main(args):
     coord_dir = config['server']['coord_dir_name']
     lidar_types = config['server']['lidar_types']
     max_cache_size = config['server']['max_cache_size']
+    max_azimuth_std = config['server']['max_azimuth_std']
     
     local_pointcloud_cache = OrderedDict()
     
@@ -132,22 +133,19 @@ def main(args):
         )
         
 
-# <<<<<<< HEAD
         ds, pts, nrm, ann, R_level = load_dataset(dataset_path, lidar = data["lidar"])
 
-# =======
-        # ds, pts, nrm, ann = load_dataset(dataset_path, lidar = data["lidar"])
         
         full_dataset = Dataset(
             data_dir=dataset_path,
             sensor_config="backend/sensor_interface/visualization/calibration/march_12_calibration.yaml",
+            max_azimuth_std=config["server"]["max_azimuth_std"]
         )
         print("full dataset loaded")
         
         state["full_dataset"] = full_dataset
         state["dataset_path"] = dataset_path
         state["lidar"] = data["lidar"]
-# >>>>>>> main
         state["dataset"] = ds
         state["points"] = pts
         state["normals"] = nrm
@@ -238,12 +236,17 @@ def main(args):
 
         with open(state["annotation_path"], "w") as f:
             json.dump(raw, f, indent=2)
+        
+
         with open(state["annotation_path"], 'r') as annot:
             propagator = Propagator(annot,  dataset=state["full_dataset"])
 
         propagator.propagate_all(state["lidar"], save_path=state["dataset_path"])
 
+         
+
         return jsonify({"status": "ok"})
+
 
     
 

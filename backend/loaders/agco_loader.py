@@ -26,6 +26,7 @@ def lidar_loader(dataset_split, lidar, global_voxel_size:float, local_voxel_size
     ds = Dataset(
         data_dir=dataset_split,
         sensor_config="backend/sensor_interface/visualization/calibration/march_12_calibration.yaml",
+        max_azimuth_std=1.7,
     )
 
     R_level = ds.pose_provider.world_level_rotation
@@ -46,7 +47,7 @@ def lidar_loader(dataset_split, lidar, global_voxel_size:float, local_voxel_size
 
             print(f"got scan with {scan}")
 
-            pts_world = scan.to_world(undistort=False, gravity_align=True)
+            pts_world = scan.to_world(undistort=True, gravity_align=True)
 
             # segment = np.load(os.path.join(lidar_dir,"segment",filename))
             # bounding_boxes_points = np.load(os.path.join(lidar_dir,"bounding_boxes_points",filename))

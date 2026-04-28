@@ -1,5 +1,5 @@
 server:
-  point_cloud_sampling_stride: 20 
+  point_cloud_sampling_stride: 5 
   local_point_cloud_voxel_downsampling: 0.02 
   global_point_cloud_voxel_dowsampling: 0.03
   data_root: "/media/ai/T7/agco2026/"
@@ -8,6 +8,7 @@ server:
   coord_dir_name: "pointcloud_raw"
   lidar_types: ["lslidar","rslidar","ouster"]
   max_cache_size: 500
+  max_azimuth_std: 2.0
 
 frontend: 
   label_dict:
