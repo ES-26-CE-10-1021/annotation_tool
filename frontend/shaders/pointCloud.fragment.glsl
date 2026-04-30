@@ -4,7 +4,7 @@ varying vec3 vPosition;
 varying vec3 vNormal;
 
 
-#define MAX_BOXES 32
+#define MAX_BOXES 100
 
 uniform mat4 bboxInv[MAX_BOXES];
 uniform vec3 bboxColor[MAX_BOXES];
@@ -68,9 +68,9 @@ void main() {
             vec4 p = bboxInv[i] * vec4(vPosition,1.0);
 
             if(
-                abs(p.x) <= 2.5 &&
-                abs(p.y) <= 2.5 &&
-                abs(p.z) <= 2.5
+                abs(p.x) <= 0.5 &&
+                abs(p.y) <= 0.5 &&
+                abs(p.z) <= 0.5
             ){
                 color = bboxColor[i];
             }

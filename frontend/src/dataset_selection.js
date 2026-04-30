@@ -99,12 +99,17 @@ async function showLidars(container, onDone) {
       selected.lidar = name;
       updateBreadcrumb();
 
+
       showLoadingOverlay();
-      await fetch("/api/select", {
+
+      const res = await fetch("/api/select", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(selected)
       });
+
+      const data = await res.json();
+      window.datasetMeta = data;
 
       const params = new URLSearchParams({
         mode: "global",
@@ -114,11 +119,12 @@ async function showLidars(container, onDone) {
       });
 
       window.history.replaceState({}, "", `?${params}`);
-      
+
       container.remove();
       console.log("lidar selected");
       hideLoadingOverlay();
-      onDone();
+
+      onDone(data);
     };
 
     container.appendChild(btn);

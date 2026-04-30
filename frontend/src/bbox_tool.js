@@ -30,11 +30,18 @@ const annotationAssets = [];
 let activeAnnotationAsset = null; 
 let activeAnnotationRoot = annotationAssets;
 
+
+export const globalAnnotations = {
+  assets: [],
+  active: null
+};
+
+
 export async function fetchAnnotations(scene, gizmoManager) {
   const res = await fetch("/api/bboxes");
   const data = await res.json();
 
-  loadAnnotations(scene, data, gizmoManager);
+  loadAnnotations(scene, data, gizmoManager, globalAnnotations);
 }
 
 export async function uploadAnnotations() {
@@ -55,7 +62,7 @@ function groupAnnotationsByLabel() {
 
   const groups = new Map();
 
-  annotationAssets.forEach(annotation => {
+  globalAnnotations.assets.forEach(annotation => {
     const label = annotation.meta.label;
 
     if (!groups.has(label)) {
@@ -110,7 +117,7 @@ function hasChildren(annotation){
 }
 
 function isAnnotationActive(annotation){
-  if (annotation === activeAnnotationAsset){
+  if (annotation === globalAnnotations.active){
     return true;
   };
   for (const child of annotation.children){
@@ -122,7 +129,7 @@ function isAnnotationActive(annotation){
 }
 
 function isAncestorOfActive(annotation) {
-  let current = activeAnnotationAsset;
+  let current = globalAnnotations.active;
 
   while (current) {
     if (current === annotation) return true;
@@ -146,7 +153,7 @@ function addAnnotationNode(annotation, gizmoManager, depth = 0) {
   btn.height = "30px";
   btn.color = "white";
   btn.background =
-    (annotation === activeAnnotationAsset)
+    (annotation === globalAnnotations.active)
       ? "#00aa00"
       : shouldExpand
         ? "#666666"
@@ -196,7 +203,6 @@ function refreshAnnotationOverview(gizmoManager) {
 
     annotationOverviewPanel.addControl(header);
 
-    // 🔥 IMPORTANT: start recursion at root annotations
     annotations.forEach(annotation => {
       addAnnotationNode(annotation, gizmoManager, 0);
     });
@@ -237,7 +243,7 @@ export function createAnnotationMenu(scene, gizmoManager) {
   createBtn.cornerRadius = 10;
 
   createBtn.onPointerClickObservable.add(() => {
-    createAnnotationAsset(scene, "bbox",gizmoManager);
+    createAnnotationAsset(scene, "bbox",gizmoManager, null, globalAnnotations.assets);
   });
 
   panel.addControl(createBtn);
@@ -251,7 +257,7 @@ export function createAnnotationMenu(scene, gizmoManager) {
   createHopperBtn.cornerRadius = 10;
 
   createHopperBtn.onPointerClickObservable.add(() => {
-    createAnnotationAsset(scene, "hopper",gizmoManager, parent=activeAnnotationAsset);
+    createAnnotationAsset(scene, "hopper",gizmoManager, globalAnnotations.assets);
   });
 
   panel.addControl(createHopperBtn);
@@ -263,7 +269,7 @@ export function createAnnotationMenu(scene, gizmoManager) {
   createChildBtn.cornerRadius = 10;
 
   createChildBtn.onPointerClickObservable.add(() => {
-    createAnnotationAsset(scene, "bbox",gizmoManager, parent=activeAnnotationAsset);
+    createAnnotationAsset(scene, "bbox",gizmoManager, globalAnnotations.assets);
   });
 
   panel.addControl(createChildBtn);
@@ -308,10 +314,10 @@ export function createAnnotationMenu(scene, gizmoManager) {
   labels.forEach(l => {
     labelGroup.addRadio(l.name, (state)=>{
 
-      if(state && activeAnnotationAsset){
+      if(state && globalAnnotations.active){
 
-        activeAnnotationAsset.meta.label = l.id;
-        updateShaderBoxes();
+        globalAnnotations.active.meta.label = l.id;
+        updateShaderBoxes(globalAnnotations.assets);
 
       }
 
@@ -354,9 +360,9 @@ export function createAnnotationMenu(scene, gizmoManager) {
 
   instanceInput.onTextChangedObservable.add(()=>{
 
-    if(activeAnnotationAsset){
+    if(globalAnnotations.active){
 
-      activeAnnotationAsset.meta.instance = parseInt(instanceInput.text);
+      globalAnnotations.active.meta.instance = parseInt(instanceInput.text);
 
     }
 
@@ -382,8 +388,8 @@ export function createAnnotationMenu(scene, gizmoManager) {
   noteInput.background = "#333333";
 
   noteInput.onTextChangedObservable.add(()=>{
-    if(activeAnnotationAsset){
-      activeAnnotationAsset.meta.note = noteInput.text;
+    if(globalAnnotations.active){
+      globalAnnotations.active.meta.note = noteInput.text;
     }
   });
   panel.addControl(noteInput);
@@ -393,11 +399,11 @@ export function createAnnotationMenu(scene, gizmoManager) {
 
 function updateBBoxMenuFromSelection() {
   
-  if (!activeAnnotationAsset || !labelGroup) return;
+  if (!globalAnnotations.active || !labelGroup) return;
   
-  console.log(activeAnnotationAsset)
+  console.log(globalAnnotations.active)
 
-  const label = activeAnnotationAsset.meta.label;
+  const label = globalAnnotations.active.meta.label;
 
   const target = labelGroup.selectors.find(
     s => s._labelId === label
@@ -409,12 +415,12 @@ function updateBBoxMenuFromSelection() {
 
   // Instance
   if (instanceInput){
-    instanceInput.text = String(activeAnnotationAsset.meta.instance ?? "");
+    instanceInput.text = String(globalAnnotations.active.meta.instance ?? "");
   }
 
   // Note
   if (noteInput){
-    noteInput.text = activeAnnotationAsset.meta.note ?? "";
+    noteInput.text = globalAnnotations.active.meta.note ?? "";
   }
 }
 
@@ -434,7 +440,7 @@ export function setupAnnotationPicking(scene, gizmoManager) {
 
     if(pick.pickedMesh && pick.pickedMesh.name === "bbox") {
 
-      selectAnnotationAsset(findAssetByMesh(annotationAssets, pick.pickedMesh), gizmoManager);
+      selectAnnotationAsset(findAssetByMesh(globalAnnotations.assets, pick.pickedMesh), gizmoManager);
       refreshAnnotationOverview(gizmoManager);
     }
 
@@ -467,11 +473,11 @@ function findAssetByMesh(root, mesh) {
 }
 
 
-function createAnnotationAsset(scene, type, gizmoManager, parent = null){
+function createAnnotationAsset(scene, type, gizmoManager, parent = null, annotationAssetList, base_size = DEFAULT_SIZE, silent=false){
   
   let mesh = (type === "bbox")
-    ? createBoundingBox(scene)
-    : createHopper(scene);
+    ? createBoundingBox(scene, base_size, silent)
+    : createHopper(scene, base_size, silent);
 
   const asset = new AnnotationAsset(type, mesh, parent);
 
@@ -479,7 +485,7 @@ function createAnnotationAsset(scene, type, gizmoManager, parent = null){
     label: 0,
     instance: 0,
     note: "",
-    size: DEFAULT_SIZE,
+    size: base_size,
     type
   };
 
@@ -488,7 +494,7 @@ function createAnnotationAsset(scene, type, gizmoManager, parent = null){
     // this makes the child follow the parent movements
     asset.mesh.position = parent.mesh.position.clone();
   } else {
-    annotationAssets.push(asset);
+    annotationAssetList.push(asset);
   }
 
   
@@ -500,16 +506,15 @@ function createAnnotationAsset(scene, type, gizmoManager, parent = null){
 
 
 function deleteAnnotationAsset(scene, gizmoManager){
-  const asset = activeAnnotationAsset;
+  const asset = globalAnnotations.active;
   if (!asset) return;
 
-  // 🔥 determine correct container
   let container;
 
   if (asset.parent) {
     container = asset.parent.children;
   } else {
-    container = annotationAssets;
+    container = globalAnnotations.assets;
   }
 
   const index = container.indexOf(asset);
@@ -520,7 +525,6 @@ function deleteAnnotationAsset(scene, gizmoManager){
     console.warn("Could not find asset in its container", asset);
   }
 
-  // 🔥 recursively delete children (important!)
   function disposeRecursive(a) {
     a.children.forEach(child => disposeRecursive(child));
     a.mesh.dispose();
@@ -529,20 +533,21 @@ function deleteAnnotationAsset(scene, gizmoManager){
   disposeRecursive(asset);
 
   gizmoManager.attachToMesh(null);
-  activeAnnotationAsset = null;
+  globalAnnotations.active = null;
 
-  updateShaderBoxes();
+  updateShaderBoxes(globalAnnotations.assets);
   refreshAnnotationOverview(gizmoManager);
 }
 
-export function createHopper(scene){
+export function createHopper(scene, base_size, silent=false){
   console.log("creating hopper")
-  const default_size = DEFAULT_SIZE
   const plane = BABYLON.MeshBuilder.CreatePlane(
     "plane", 
-    {size: default_size}, 
+    {size: 1}, 
     scene
   );
+
+  plane.scaling = new BABYLON.Vector3(base_size, base_size, base_size);
   const mat = new BABYLON.StandardMaterial("bboxMat", scene);
   mat.wireframe = false;
   mat.alpha = 0.5;
@@ -553,6 +558,10 @@ export function createHopper(scene){
   plane.edgesWidth = 5.0;
   plane.edgesColor = new BABYLON.Color4(0.1, 0.8, 0.1, 0.5);
   
+  if (silent) {
+    plane.setEnabled(false);
+  }
+
   return plane;
 
 }
@@ -560,13 +569,14 @@ export function createHopper(scene){
 
 
 
-export function createBoundingBox(scene) {
-  const default_size = DEFAULT_SIZE
+export function createBoundingBox(scene, base_size, silent=false) {
   const bbox = BABYLON.MeshBuilder.CreateBox(
     "bbox",
-    { size: default_size },
+    { size: 1 },
     scene
   );
+  
+  bbox.scaling = new BABYLON.Vector3(base_size, base_size, base_size);
 
   const mat = new BABYLON.StandardMaterial("bboxMat", scene);
   mat.wireframe = false;
@@ -577,34 +587,38 @@ export function createBoundingBox(scene) {
   bbox.enableEdgesRendering();
   bbox.edgesWidth = 5.0;
   bbox.edgesColor = new BABYLON.Color4(0.1, 0.1, 0.8, 0.5);
+  
+  if (silent) {
+    bbox.setEnabled(false);
+  }
 
   return bbox;
 }
 
 
-export function deleteBoundingBox(gizmoManager){
-
-  if (!activeBBox) return;
-
-  // Remove from array
-  const index = bboxes.indexOf(activeBBox);
-  if (index !== -1) {
-    bboxes.splice(index, 1);
-  }
-
-  // Dispose mesh
-  activeBBox.dispose();
-
-  // Detach gizmo
-  gizmoManager.attachToMesh(null);
-
-  // Clear selection
-  activeBBox = null;
-
-  // Update shader
-  updateShaderBoxes();
-  refreshAnnotationOverview(gizmoManager);
-}
+// export function deleteBoundingBox(gizmoManager){
+//
+//   if (!activeBBox) return;
+//
+//   // Remove from array
+//   const index = bboxes.indexOf(activeBBox);
+//   if (index !== -1) {
+//     bboxes.splice(index, 1);
+//   }
+//
+//   // Dispose mesh
+//   activeBBox.dispose();
+//
+//   // Detach gizmo
+//   gizmoManager.attachToMesh(null);
+//
+//   // Clear selection
+//   activeBBox = null;
+//
+//   // Update shader
+//   updateShaderBoxes(annotationAssets);
+//   refreshAnnotationOverview(gizmoManager);
+// }
 
 
 
@@ -623,7 +637,7 @@ function dictAnnotation(annotation){
     position: annotation.mesh.position.asArray(),
     rotationQuaternion: [q.x, q.y, q.z, q.w],
     scaling: annotation.mesh.scaling.asArray(),
-    base_size: annotation.meta.size ?? 5,
+    base_size: 1,
     label: annotation.meta.label,
     instance: annotation.meta.instance,
     note: annotation.meta.note,
@@ -634,7 +648,7 @@ function dictAnnotation(annotation){
 
 
 export function saveAnnotations() {
-  const data = annotationAssets.map(annotation => {
+  const data = globalAnnotations.assets.map(annotation => {
     return dictAnnotation(annotation)
   });
   console.log("constructed json string from", data);
@@ -642,21 +656,36 @@ export function saveAnnotations() {
 }
 
 
-function buildAnnotation(scene, data, gizmoManager, parent = null) {
+function buildAnnotation(scene, data, gizmoManager, parent = null, state, silent=false) {
 
   // create asset (returns asset + mesh)
   const asset = createAnnotationAsset(
     scene,
     data.type,
     gizmoManager,
-    parent
+    parent,
+    state.assets,
+    data.base_size,
+    silent
   );
+
+  console.log('annotation base size', data.base_size)
 
   const mesh = asset.mesh;
 
   // --- TRANSFORM ---
   mesh.position = new BABYLON.Vector3(...data.position);
-  mesh.scaling = new BABYLON.Vector3(...data.scaling);
+
+  const baseSize = data.base_size ?? DEFAULT_SIZE;
+
+  const savedScale = data.scaling ?? [1,1,1];
+
+  mesh.scaling = new BABYLON.Vector3(
+    savedScale[0] * baseSize,
+    savedScale[1] * baseSize,
+    savedScale[2] * baseSize
+  );
+
 
   mesh.rotationQuaternion = new BABYLON.Quaternion(
     ...data.rotationQuaternion
@@ -672,7 +701,7 @@ function buildAnnotation(scene, data, gizmoManager, parent = null) {
   // --- CHILDREN ---
   if (data.children && data.children.length > 0) {
     data.children.forEach(childData => {
-      buildAnnotation(scene, childData, gizmoManager, asset);
+      buildAnnotation(scene, childData, gizmoManager, asset, state, silent);
     });
   }
 
@@ -680,7 +709,7 @@ function buildAnnotation(scene, data, gizmoManager, parent = null) {
 }
 
 
-export function loadAnnotations(scene, jsonData, gizmoManager) {
+export function loadAnnotations(scene, jsonData, gizmoManager, state, silent=false) {
 
   const parsed = typeof jsonData === "string"
     ? JSON.parse(jsonData)
@@ -689,39 +718,41 @@ export function loadAnnotations(scene, jsonData, gizmoManager) {
   if (!parsed.annotations) return;
 
   // clear existing
-  annotationAssets.length = 0;
-  activeAnnotationAsset = null;
+  state.assets.length = 0;
+  state.active = null;
 
   // build tree
   parsed.annotations.forEach(data => {
-    buildAnnotation(scene, data, gizmoManager, null);
+    buildAnnotation(scene, data, gizmoManager, null, state, silent);
   });
-
-  refreshAnnotationOverview(gizmoManager);
-  updateShaderBoxes();
+  
+  if (!silent){
+    refreshAnnotationOverview(gizmoManager);
+    updateShaderBoxes(state.assets);
+  }
 }
 
 
 function selectAnnotationAsset(annotationAsset, gizmoManager) {
-  activeAnnotationAsset = annotationAsset;
-  console.log(activeAnnotationAsset)
+  globalAnnotations.active = annotationAsset;
+  console.log(globalAnnotations.active)
   console.log(annotationAsset)
-  gizmoManager.attachToMesh(activeAnnotationAsset.mesh);
+  gizmoManager.attachToMesh(globalAnnotations.active.mesh);
   updateBBoxMenuFromSelection();
-  updateShaderBoxes();
+  updateShaderBoxes(globalAnnotations.assets);
 }
 
 
 
 
-export function updateShaderBoxes() {
+export function updateShaderBoxes(annotationShaderAssets) {
 
   if (!pointMaterial) return;
 
   const matrices = [];
   const colors = [];
 
-  const bboxes = collectByType(annotationAssets, "bbox");
+  const bboxes = collectByType(annotationShaderAssets, "bbox");
 
   for (const asset of bboxes) {
     const bbox = asset.mesh;
@@ -798,5 +829,5 @@ export function setAnnotationMeshesVisible(visible) {
     }
   }
 
-  traverse(annotationAssets);
+  traverse(globalAnnotations.assets);
 }

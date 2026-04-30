@@ -107,6 +107,15 @@ class Propagator:
             with open(filename, "w") as f:
                 json.dump(local_annotation_dict, f, indent=4)
 
+            transform_dir = os.path.join(save_path, lidar, "global_transforms")
+
+            os.makedirs(transform_dir, exist_ok=True)
+
+            np.save(os.path.join(transform_dir, scan.filename), T_world)
+
+
+
+
 
 
 

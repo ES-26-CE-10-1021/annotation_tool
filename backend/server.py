@@ -54,7 +54,8 @@ def main(args):
     lidar_types = config['server']['lidar_types']
     max_cache_size = config['server']['max_cache_size']
     max_azimuth_std = config['server']['max_azimuth_std']
-    
+    calibration_file = config['server']['calibration_file']
+
     local_pointcloud_cache = OrderedDict()
     
     full_dataset = None
@@ -221,6 +222,7 @@ def main(args):
             return jsonify({"error": "No gravity alignment available"}), 400
 
         snapshot_path = state["annotation_path"].parent / "gravity_align.npz"
+        calibration_save_path = state["annotation_path"].parent / "calibration.yml"
         R_mat = R_level.as_matrix()
         if snapshot_path.exists():
             stored = np.load(snapshot_path)["R_level"]
@@ -233,17 +235,24 @@ def main(args):
 
         # un-level display-frame boxes back to raw world before persisting
         raw = {**data, "annotations": _transform_tree(data["annotations"], R_level.inv())}
+        
+        raw["label_name_dict"] = config["frontend"]["label_dict"]
+
 
         with open(state["annotation_path"], "w") as f:
             json.dump(raw, f, indent=2)
+        
+        with open(calibration_file, 'r') as f:
+            calib_data = yaml.load(f, yaml.SafeLoader)
+        
+        with open(calibration_save_path, 'w') as f: 
+            yaml.dump(calib_data, f, yaml.SafeDumper)
         
 
         with open(state["annotation_path"], 'r') as annot:
             propagator = Propagator(annot,  dataset=state["full_dataset"])
 
-        propagator.propagate_all(state["lidar"], save_path=state["dataset_path"])
-
-         
+        propagator.propagate_all(state["lidar"], save_path=state["dataset_path"]) 
 
         return jsonify({"status": "ok"})
 
@@ -289,7 +298,24 @@ def main(args):
 
         return Response(local_points.tobytes(), mimetype="application/octet-stream")
 
+    @app.route("/api/local_bboxes/<int:index>", methods=["GET"])
+    def get_local_bboxes(index):
+        if state["full_dataset"] is None:
+            return jsonify({"annotations": []})
 
+        frame = state["full_dataset"][index]
+        scan = frame.lidar(state["lidar"])
+
+        folder = state["dataset_path"] / state["lidar"] / "annotations"
+        filename = folder / scan.filename.replace("npy", "json")
+
+        if not filename.exists():
+            return jsonify({"annotations": []})
+
+        with open(filename, "r") as f:
+            data = json.load(f)
+
+        return jsonify(data)
 
 
     app.run(debug=True) 

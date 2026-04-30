@@ -1,16 +1,16 @@
 import * as GUI from "@babylonjs/gui";
 import { createScene } from "./scene.js";
 import { startStreaming, setupKeyboard, pointMeshes } from "./point_cloud.js";
-import {createAnnotationOverview, createAnnotationMenu, setupAnnotationPicking, updateShaderBoxes, uploadAnnotations, fetchAnnotations, setAnnotationUIVisible, setAnnotationMeshesVisible} from "./bbox_tool.js";
+import {createAnnotationOverview, createAnnotationMenu, setupAnnotationPicking, updateShaderBoxes, uploadAnnotations, fetchAnnotations, setAnnotationUIVisible, setAnnotationMeshesVisible, globalAnnotations} from "./bbox_tool.js";
 
-import { createScrubberMenu, setScrubberUIVisible } from "./local_viewer.js";
+import { createScrubberMenu, setScrubberUIVisible, localMeshCache, clearLocalAnnotationMode} from "./local_viewer.js";
 
 
 // ---- Engine + Scene ----
 let engine;
 let scene;
 let camera;
-let gizmoManager;
+export let gizmoManager;
 let datasetMeta;
 
 
@@ -68,10 +68,11 @@ function switchMode(mode) {
 
   if (mode === "global") {
     clearLocalMeshes();
+    clearLocalAnnotationMode();
     setAnnotationUIVisible(true);
     setAnnotationMeshesVisible(true);
-    setScrubberUIVisible(false)
-
+    setScrubberUIVisible(false);
+    updateShaderBoxes(globalAnnotations.assets);
     if (!streamingActive) {
       startStreaming(scene);
       streamingActive = true;
@@ -95,6 +96,9 @@ function switchMode(mode) {
 }
 
 
+const refreshBoxes = () => {
+  updateShaderBoxes(globalAnnotations.assets);
+};
 
 
 function createTopMenu(scene){
@@ -219,9 +223,9 @@ export function startGlobalEditor(container, meta) {
 
   createTopMenu(scene);
 
-  gizmoManager.gizmos.positionGizmo.onDragObservable.add(updateShaderBoxes);
-  gizmoManager.gizmos.rotationGizmo.onDragObservable.add(updateShaderBoxes);
-  gizmoManager.gizmos.scaleGizmo.onDragObservable.add(updateShaderBoxes);
+  gizmoManager.gizmos.positionGizmo.onDragObservable.add(refreshBoxes);
+  gizmoManager.gizmos.rotationGizmo.onDragObservable.add(refreshBoxes);
+  gizmoManager.gizmos.scaleGizmo.onDragObservable.add(refreshBoxes);
 
   engine.runRenderLoop(() => {
     scene.render();

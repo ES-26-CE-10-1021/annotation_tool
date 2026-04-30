@@ -49,6 +49,10 @@ homeBtn.style = `
   padding: 6px 12px;
   cursor: pointer;
 `;
+homeBtn.onclick = () => {
+  window.location.href = "/js/";
+};
+
 
 topbar.appendChild(title);
 topbar.appendChild(homeBtn);
@@ -87,7 +91,7 @@ if (initial) {
   startGlobalEditor(content,data);
 
 } else {
-  createDatasetSelector(content, () => {
+  createDatasetSelector(content, (data) => {
     startGlobalEditor(content, data);
   });
 }
