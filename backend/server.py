@@ -17,6 +17,34 @@ from backend.propagators.agco_propagator import Propagator
 from collections import OrderedDict 
 
 
+POINT_LAYOUT_WITH_COLOR = {
+    "fields": ["x","y","z","nx","ny","nz","r","g","b"],
+    "dtype": "float16"
+}
+
+POINT_LAYOUT_NO_COLOR = {
+    "fields": ["x","y","z","nx","ny","nz"],
+    "dtype": "float16"
+}
+
+
+POINT_LAYOUT_NORMAL_AND_ANNOTATION = {
+    "fields": ["x","y","z","nx","ny","nz","seg", "inst"],
+    "dtype": "float16"
+}
+
+POINT_LAYOUT_ANNOTATION = {
+    "fields": ["x", "y", "z", "seg", "inst"],
+    "dtype": "float16"
+}
+
+
+LAYOUT_HEADER_WITH_COLOR = json.dumps(POINT_LAYOUT_WITH_COLOR)
+LAYOUT_HEADER_NO_COLOR = json.dumps(POINT_LAYOUT_NO_COLOR)
+LAYOUT_HEADER_ANNOTATION = json.dumps(POINT_LAYOUT_ANNOTATION)
+
+
+
 def main(args):
     with open(args.config, 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
@@ -29,6 +57,7 @@ def main(args):
         "dataset": None,
         "points": None,
         "normals": None,
+        "colors": None,
         "annotation_path": None,
         "R_level": None,
         "lidar":None
@@ -55,9 +84,14 @@ def main(args):
     max_cache_size = config['server']['max_cache_size']
     max_azimuth_std = config['server']['max_azimuth_std']
     calibration_file = config['server']['calibration_file']
+    save_segment = config['server']['save_segment']
+    load_colors = config['server']['load_colors']
+    save_colors = config['server']['save_colors']
 
     local_pointcloud_cache = OrderedDict()
     
+
+
     full_dataset = None
 
     def load_dataset(dataset_path, lidar):
@@ -67,15 +101,22 @@ def main(args):
             lidar,
             global_voxel_size,
             local_voxel_size,
-            point_cloud_sampling_stride
+            point_cloud_sampling_stride,
+            colors=save_colors
         )
 
         points = np.array(ds.point.positions.numpy(), dtype=np.float16)
         normals = np.array(ds.point.normals.numpy(), dtype=np.float16)
 
+        if load_colors:
+            colors = np.array(ds.point.colors.numpy(), dtype=np.float16)
+        else:
+            colors = None 
+
+
         annotation_path = dataset_path / config['server']['annotation_file']
 
-        return ds, points, normals, annotation_path, R_level
+        return ds, points, normals, annotation_path, colors, R_level
 
 
     app = Flask(
@@ -134,7 +175,7 @@ def main(args):
         )
         
 
-        ds, pts, nrm, ann, R_level = load_dataset(dataset_path, lidar = data["lidar"])
+        ds, pts, nrm, ann, colors, R_level = load_dataset(dataset_path, lidar = data["lidar"])
 
         
         full_dataset = Dataset(
@@ -150,6 +191,7 @@ def main(args):
         state["dataset"] = ds
         state["points"] = pts
         state["normals"] = nrm
+        state["colors"] = colors
         state["annotation_path"] = ann
         state["R_level"] = R_level
 
@@ -166,6 +208,7 @@ def main(args):
 
 
 
+    
     @app.route("/api/points/<int:chunk>")
     def stream_points(chunk):
 
@@ -181,10 +224,27 @@ def main(args):
         if start >= len(points):
             return Response(status=204)
 
-        data = np.hstack([points[start:end], normals[start:end]]).astype(np.float16)
+        count = end - start
 
-        return Response(data.tobytes(), mimetype="application/octet-stream")
+        if load_colors and state["colors"] is not None:
+            data = np.empty((count, 9), dtype=np.float16)
+            data[:, 0:3] = points[start:end]
+            data[:, 3:6] = normals[start:end]
+            data[:, 6:9] = state["colors"][start:end]
 
+            header = LAYOUT_HEADER_WITH_COLOR
+        else:
+            data = np.empty((count, 6), dtype=np.float16)
+            data[:, 0:3] = points[start:end]
+            data[:, 3:6] = normals[start:end]
+
+            header = LAYOUT_HEADER_NO_COLOR
+
+        return Response(
+            data.tobytes(),
+            mimetype="application/octet-stream",
+            headers={"X-Point-Layout": header}
+        )
 
     @app.route("/api/bboxes", methods=["GET"])
     def get_bboxes():
@@ -252,7 +312,7 @@ def main(args):
         with open(state["annotation_path"], 'r') as annot:
             propagator = Propagator(annot,  dataset=state["full_dataset"])
 
-        propagator.propagate_all(state["lidar"], save_path=state["dataset_path"]) 
+        propagator.propagate_all(state["lidar"], save_path=state["dataset_path"], config=config) 
 
         return jsonify({"status": "ok"})
 
@@ -280,23 +340,69 @@ def main(args):
         key = (index, state["lidar"])
         print(f"getting frame {key}")
 
+        layout = {
+            "fields": ["x","y","z"],
+            "dtype": "float16"
+        }
         
+
+
         if key in local_pointcloud_cache:
             local_pointcloud_cache.move_to_end(key)
-            local_points = local_pointcloud_cache[key]
+            data, layout = local_pointcloud_cache[key]
 
         else:
             local_frame = sequence_dataset[index] 
             
-            local_scan = local_frame.lidar(state["lidar"]) 
+            scan = local_frame.lidar(state["lidar"]) 
+            points = scan.to_rtk().astype(np.float16)
 
-            local_points = local_scan.to_rtk().astype(np.float16)
-            local_pointcloud_cache[key] = local_points
+            seg_path = state["dataset_path"] / state["lidar"] / "segment" / scan.filename
+            inst_path = state["dataset_path"] / state["lidar"] / "instance" / scan.filename
+
+            if seg_path.exists() and inst_path.exists():
+                segment = np.load(seg_path).astype(np.float16)
+                instance = np.load(inst_path).astype(np.float16)
+                if len(segment) != len(points) or len(instance) != len(points):
+                    print(f"[WARN] mismatch at frame {index}, skipping annotations")
+                    data = points
+                else:
+                    data = np.hstack([
+                        points,
+                        segment[:, None],
+                        instance[:, None]
+                    ])
+
+                    layout = {
+                        "fields": ["x","y","z","seg","inst"],
+                        "dtype": "float16"
+                    }
+                    print(f"non zero segmenet points {np.sum(segment>0)}")
+
+            else:
+                data = points
+                layout = {
+                    "fields": ["x","y","z"],
+                    "dtype": "float16"
+                }
+
+            local_pointcloud_cache[key] = (data, layout)
 
             if len(local_pointcloud_cache) > max_cache_size:
                 local_pointcloud_cache.popitem(last=False)
+        
+        print(f"sending local point cloud with layout {layout}")
+        
+        return Response(
+            data.tobytes(),
+            mimetype="application/octet-stream",
+            headers={
+                "X-Point-Layout": json.dumps(layout)
+            }
+        )
 
-        return Response(local_points.tobytes(), mimetype="application/octet-stream")
+
+
 
     @app.route("/api/local_bboxes/<int:index>", methods=["GET"])
     def get_local_bboxes(index):

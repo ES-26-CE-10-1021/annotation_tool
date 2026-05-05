@@ -39,6 +39,12 @@ const fetchQueue = [];
 const pendingSet = new Set();
 let queueDirty = false;
 
+
+let cloudMin = new BABYLON.Vector3(Infinity, Infinity, Infinity);
+let cloudMax = new BABYLON.Vector3(-Infinity, -Infinity, -Infinity);
+
+
+
 // --------------------------------------------------
 // Annotation cache (single frame + optional memory cache)
 // --------------------------------------------------
@@ -153,30 +159,7 @@ export function setScrubberUIVisible(visible) {
   }
 }
 
-// --------------------------------------------------
-// Frame switching
-// --------------------------------------------------
 
-// async function showFrame(index, token = requestToken) {
-//   enqueueFetch(index, 100);
-//
-//   while (!localMeshCache.has(index)) {
-//     await sleep(10);
-//   }
-//
-//   if (token !== requestToken) return;
-//
-//   setVisible(index);
-//
-//   const localAnnotations = await fetchLocalAnnotations(sceneRef, index);
-//
-//   if (token !== requestToken) return;
-//
-//   updateShaderBoxes(localAnnotations.assets);
-//
-//   prefetchNeighbors(index);
-//   trimQueue(index);
-// }
 
 async function showFrame(index, token = requestToken) {
   enqueueFetch(index, 100);
@@ -239,37 +222,139 @@ function stopPlayback() {
 // Point cloud loading
 // --------------------------------------------------
 
+// export async function loadLocalPointCloud(scene, index, isPrefetch = false) {
+//   sceneRef = scene;
+//
+//   if (localMeshCache.has(index)) {
+//     if (!isPrefetch) {
+//       setVisible(index);
+//     }
+//     pruneCache(index);
+//     return;
+//   }
+//   const res = await fetch(`/api/local_points/${index}`);
+//   if (!res.ok) return;
+//
+//   const segData = [];
+//   const instData = [];
+//
+//   const layout = JSON.parse(res.headers.get("X-Point-Layout"));
+//   const fields = layout.fields;
+//   const stride = fields.length;
+//
+//   const offsets = Object.fromEntries(
+//     fields.map((f, i) => [f, i])
+//   );
+//
+//   const pointCount = data.length / stride;
+//
+//
+//
+//   const buffer = await res.arrayBuffer();
+//   const data = new Float16Array(buffer);
+//
+//   // const pointCount = data.length / 3;
+//
+//   const positions = new Float32Array(pointCount * 3);
+//   const normals = new Float32Array(pointCount * 3);
+//
+//   for (let i = 0; i < data.length; i += stride) {
+//
+//     const x = data[i + offsets.x];
+//     const y = data[i + offsets.y];
+//     const z = data[i + offsets.z];
+//
+//     positions.push(x, y, z);
+//
+//     normals.push(0, 1, 0); // still dummy
+//
+//     if (offsets.seg !== undefined) {
+//       const seg = data[i + offsets.seg];
+//       segData.push(seg);
+//     }
+//
+//     if (offsets.inst !== undefined) {
+//       const inst = data[i + offsets.inst];
+//       instData.push(inst);
+//     }
+//   }
+//   const mesh = new BABYLON.Mesh(`local_${index}`, scene);
+//
+//   const vertexData = new BABYLON.VertexData();
+//   vertexData.positions = positions;
+//   vertexData.normals = normals;
+//   vertexData.applyToMesh(mesh, true);
+//
+//   mesh.material = pointMaterial;
+//   mesh.setEnabled(false);
+//
+//   localMeshCache.set(index, mesh);
+//
+//   pruneCache(index);
+// }
+
 export async function loadLocalPointCloud(scene, index, isPrefetch = false) {
   sceneRef = scene;
 
   if (localMeshCache.has(index)) {
-    if (!isPrefetch) {
-      setVisible(index);
-    }
+    if (!isPrefetch) setVisible(index);
     pruneCache(index);
     return;
   }
 
   const res = await fetch(`/api/local_points/${index}`);
-
   if (!res.ok) return;
+
+  const layout = JSON.parse(res.headers.get("X-Point-Layout"));
+  const fields = layout.fields;
+  const stride = fields.length;
+
+  const offsets = Object.fromEntries(
+    fields.map((f, i) => [f, i])
+  );
 
   const buffer = await res.arrayBuffer();
   const data = new Float16Array(buffer);
 
-  const pointCount = data.length / 3;
+  const pointCount = data.length / stride;
 
   const positions = new Float32Array(pointCount * 3);
   const normals = new Float32Array(pointCount * 3);
 
-  for (let i = 0; i < data.length; i += 3) {
-    positions[i] = data[i];
-    positions[i + 1] = data[i + 1];
-    positions[i + 2] = data[i + 2];
+  const segData = [];
+  const instData = [];
 
-    normals[i] = 0;
-    normals[i + 1] = 1;
-    normals[i + 2] = 0;
+  let p = 0;
+  let n = 0;
+
+  for (let i = 0; i < data.length; i += stride) {
+    const x = data[i + offsets.x];
+    const y = data[i + offsets.y];
+    const z = data[i + offsets.z];
+
+    positions[p++] = x;
+    positions[p++] = y;
+    positions[p++] = z;
+
+    normals[n++] = 0;
+    normals[n++] = 1;
+    normals[n++] = 0;
+
+    cloudMin.x = Math.min(cloudMin.x, x);
+    cloudMin.y = Math.min(cloudMin.y, y);
+    cloudMin.z = Math.min(cloudMin.z, z);
+
+    cloudMax.x = Math.max(cloudMax.x, x);
+    cloudMax.y = Math.max(cloudMax.y, y);
+    cloudMax.z = Math.max(cloudMax.z, z);
+
+    if (offsets.seg !== undefined) {
+      segData.push(data[i + offsets.seg]);
+    }
+
+    if (offsets.inst !== undefined) {
+      instData.push(data[i + offsets.inst]);
+    }
   }
 
   const mesh = new BABYLON.Mesh(`local_${index}`, scene);
@@ -277,13 +362,71 @@ export async function loadLocalPointCloud(scene, index, isPrefetch = false) {
   const vertexData = new BABYLON.VertexData();
   vertexData.positions = positions;
   vertexData.normals = normals;
+
+  console.log("seg range:", Math.min(...segData), Math.max(...segData));
+  console.log("inst range:", Math.min(...instData), Math.max(...instData));
+
+  // vertexData.set(
+  //   new Float32Array(
+  //     segData.length === pointCount
+  //       ? segData
+  //       : new Array(pointCount).fill(0)
+  //   ),
+  //   "segment"
+  // );
+  // const finalSegArray =
+  //   segData.length === pointCount
+  //     ? new Float32Array(segData)
+  //     : new Float32Array(pointCount); // zero-filled by default
+  //
+  // console.log("segment debug:", {
+  //   segLength: segData.length,
+  //   pointCount,
+  //   usingRealData: segData.length === pointCount,
+  //   sample: Array.from(finalSegArray.slice(0, 20)),
+  //   min: Math.min(...finalSegArray),
+  //   max: Math.max(...finalSegArray)
+  // });
+  //
+  // vertexData.set(finalSegArray, "segment");
+  //
+  // vertexData.set(
+  //   new Float32Array(
+  //     instData.length === pointCount
+  //       ? instData
+  //       : new Array(pointCount).fill(0)
+  //   ),
+  //   "instance"
+  // );
+
+
+  const custom = new Float32Array(pointCount * 3);
+
+  for (let i = 0; i < pointCount; i++) {
+    custom[i * 3 + 0] = segData[i] ?? 0;
+    custom[i * 3 + 1] = instData[i] ?? 0;
+    custom[i * 3 + 2] = 0; // spare channel
+  }
+
+  mesh.setVerticesBuffer(
+    new BABYLON.VertexBuffer(
+      scene.getEngine(),
+      custom,
+      "custom",   // must match shader attribute name
+      false,
+      false,
+      3           // vec3
+    )
+  );
+
+
+
   vertexData.applyToMesh(mesh, true);
 
   mesh.material = pointMaterial;
   mesh.setEnabled(false);
 
   localMeshCache.set(index, mesh);
-
   pruneCache(index);
 }
 

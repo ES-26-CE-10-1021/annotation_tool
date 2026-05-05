@@ -2,7 +2,10 @@ precision highp float;
 
 varying vec3 vPosition;
 varying vec3 vNormal;
+varying vec3 vColor;
 
+varying float vSegment;
+varying float vInstance;
 
 #define MAX_BOXES 100
 
@@ -57,6 +60,29 @@ void main() {
     else if(coloringMode == 3){
         color = colorByAxis(2);
     }
+    else if(coloringMode == 4){
+        color= vColor;
+    }
+    else if(coloringMode == 5){
+        color= vNormal;
+    }
+
+    else if (coloringMode == 6) {
+        // semantic segmentation
+        float s = vSegment;
+
+        // simple stable palette
+        color = hsv2rgb(vec3(fract(s * 0.15), 0.8, 1.0));
+    }
+    else if (coloringMode == 7) {
+        // instance coloring
+        float i = vInstance;
+
+        // different hash → different distribution
+        color = hsv2rgb(vec3(fract(i * 0.618), 0.9, 1.0));
+    }
+
+
     else{
 
         color = vec3(0.5,0.5,0.5);
